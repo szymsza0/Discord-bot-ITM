@@ -44,7 +44,7 @@ const anthropic = new Anthropic({
 async function parseTaskWithClaude(input) {
   try {
     const message = await anthropic.messages.create({
-      model: "claude-3-7-sonnet-20250219",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 1024,
       messages: [
         {
