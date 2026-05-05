@@ -8,9 +8,11 @@ function createHelpEmbed() {
     .setDescription(
       [
         "`!sowa ping` - test połączenia z SOWA",
+        "`!sowa pm` - lista aktywnych PM-ów",
         "`!sowa faktury` - lista nieopłaconych faktur",
         "`!sowa faktury <PM>` - filtrowanie po ownerze/PM",
         "`!sowa oplacona <NUMER_FAKTURY>` - ręczne oznaczenie opłacenia",
+        "`!sowa przypisz <NIP lub nazwa klienta> | <Imię Nazwisko PM>` - przypisanie klienta do PM",
       ].join("\n")
     )
     .setFooter({ text: "Adapter Discord -> SOWA" });
@@ -79,6 +81,34 @@ function fakturyEmbeds(payload, authorTag) {
   });
 }
 
+function pmEmbeds(payload, authorTag) {
+  const items = Array.isArray(payload?.items) ? payload.items : [];
+  if (items.length === 0) {
+    return [
+      new EmbedBuilder()
+        .setColor("#FFA500")
+        .setTitle("👥 Brak aktywnych PM-ów")
+        .setDescription("W SOWA nie ma aktywnych project managerów.")
+        .setFooter({ text: `Wywołał: ${authorTag}` }),
+    ];
+  }
+
+  const lines = items.map((item) => {
+    const discord = item?.discordUsername
+      ? ` (@${item.discordUsername})`
+      : "";
+    return `• **${item?.fullName || "—"}**${discord}`;
+  });
+
+  return [
+    new EmbedBuilder()
+      .setColor("#0079BF")
+      .setTitle(`👥 Project managerowie (${items.length})`)
+      .setDescription(lines.join("\n"))
+      .setFooter({ text: `Wywołał: ${authorTag}` }),
+  ];
+}
+
 export async function processSowaCommand(message) {
   const rawInput = message.content.slice("!sowa".length).trim();
   if (!rawInput) {
@@ -102,13 +132,13 @@ export async function processSowaCommand(message) {
   const subcommand = (subcommandRaw || "").toLowerCase();
   const authorTag = message.author?.tag || message.author?.username || "użytkownik";
 
-  if (!["ping", "faktury", "oplacona"].includes(subcommand)) {
+  if (!["ping", "pm", "faktury", "oplacona", "przypisz"].includes(subcommand)) {
     return message.reply({
       embeds: [
         new EmbedBuilder()
           .setColor("#FF0000")
           .setTitle("❌ Nieznana komenda SOWA")
-          .setDescription("Dostępne: `ping`, `faktury`, `oplacona`"),
+          .setDescription("Dostępne: `ping`, `pm`, `faktury`, `oplacona`, `przypisz`"),
       ],
     });
   }
@@ -120,6 +150,19 @@ export async function processSowaCommand(message) {
           .setColor("#FF0000")
           .setTitle("❌ Brak numeru faktury")
           .setDescription("Użycie: `!sowa oplacona FV/2026/04/012`"),
+      ],
+    });
+  }
+
+  if (subcommand === "przypisz" && !args.join(" ").includes("|")) {
+    return message.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor("#FF0000")
+          .setTitle("❌ Nieprawidłowy format komendy")
+          .setDescription(
+            "Użycie: `!sowa przypisz <NIP lub nazwa klienta> | <Imię Nazwisko PM>`"
+          ),
       ],
     });
   }
@@ -165,6 +208,20 @@ export async function processSowaCommand(message) {
       });
     }
 
+    if (subcommand === "przypisz") {
+      return pending.edit({
+        embeds: [
+          new EmbedBuilder()
+            .setColor("#2E8B57")
+            .setTitle("✅ Zaktualizowano przypisanie PM")
+            .setDescription(
+              `Klient **${payload?.clientName || "—"}** został przypisany do **${payload?.ownerName || "—"}**.`
+            )
+            .setFooter({ text: `Wywołał: ${authorTag}` }),
+        ],
+      });
+    }
+
     if (subcommand === "faktury") {
       const embeds = fakturyEmbeds(payload, authorTag);
       await pending.edit({ embeds: [embeds[0]] });
@@ -172,6 +229,11 @@ export async function processSowaCommand(message) {
         await message.channel.send({ embeds: [embeds[i]] });
       }
       return;
+    }
+
+    if (subcommand === "pm") {
+      const embeds = pmEmbeds(payload, authorTag);
+      return pending.edit({ embeds: [embeds[0]] });
     }
 
     return pending.edit({
@@ -194,4 +256,3 @@ export async function processSowaCommand(message) {
     });
   }
 }
-

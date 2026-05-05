@@ -6,3 +6,6 @@
   - wykrywanie odpowiedzi nie-JSON (np. HTML po Cloudflare Access redirect),
   - walidacja `payload.ok === true` po stronie klienta SOWA,
   - jawny błąd zamiast fałszywego sukcesu komendy `!sowa`.
+- [x] Rozszerzenie komend bota o obsługę PM:
+  - `!sowa pm` - lista aktywnych PM-ów z SOWA,
+  - `!sowa przypisz <NIP lub nazwa klienta> | <Imię Nazwisko PM>` - przypisanie klienta do PM.
