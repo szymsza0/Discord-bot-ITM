@@ -11,6 +11,7 @@ function createHelpEmbed() {
         "`!sowa pm` - lista aktywnych PM-ów",
         "`!sowa faktury` - lista nieopłaconych faktur",
         "`!sowa faktury <PM>` - filtrowanie po ownerze/PM",
+        "`!sowa faktury --pm <PM> --klient <NIP/nazwa>` - filtrowanie PM + klient",
         "`!sowa oplacona <NUMER_FAKTURY>` - ręczne oznaczenie opłacenia",
         "`!sowa przypisz <NIP lub nazwa klienta> | <Imię Nazwisko PM>` - przypisanie klienta do PM",
       ].join("\n")
@@ -37,6 +38,7 @@ function fakturyEmbeds(payload, authorTag) {
   const items = Array.isArray(payload?.items) ? payload.items : [];
   const count = typeof payload?.count === "number" ? payload.count : items.length;
   const ownerFilter = payload?.ownerFilter || null;
+  const clientFilter = payload?.clientFilter || null;
 
   if (count === 0) {
     return [
@@ -74,9 +76,10 @@ function fakturyEmbeds(payload, authorTag) {
       )
       .setDescription(lines.join("\n"))
       .setFooter({
-        text: ownerFilter
-          ? `Filtr PM: ${ownerFilter} • Wywołał: ${authorTag}`
-          : `Wywołał: ${authorTag}`,
+        text:
+          ownerFilter || clientFilter
+            ? `${ownerFilter ? `PM: ${ownerFilter}` : ""}${ownerFilter && clientFilter ? " • " : ""}${clientFilter ? `Klient: ${clientFilter}` : ""} • Wywołał: ${authorTag}`
+            : `Wywołał: ${authorTag}`,
       });
   });
 }

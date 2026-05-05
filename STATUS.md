@@ -9,3 +9,5 @@
 - [x] Rozszerzenie komend bota o obsługę PM:
   - `!sowa pm` - lista aktywnych PM-ów z SOWA,
   - `!sowa przypisz <NIP lub nazwa klienta> | <Imię Nazwisko PM>` - przypisanie klienta do PM.
+- [x] Rozszerzenie podpowiedzi `!sowa faktury` o składnię filtrów:
+  - `!sowa faktury --pm <PM> --klient <NIP/nazwa>`.
