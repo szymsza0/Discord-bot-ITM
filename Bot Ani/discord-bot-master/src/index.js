@@ -9,6 +9,7 @@ import { processDisconnectCommand } from "./commands/connect.js";
 import { getConnectionsCommand } from "./commands/connect.js";
 import { processLekcjeCommand } from "./commands/lekcje.js"; // Dodany import
 import { processFakturyCommand } from "./commands/faktury.js"; //dodany import
+import { processSowaCommand } from "./commands/sowa.js";
 
 import { initDatabase } from "./utils/database.js";
 
@@ -74,6 +75,10 @@ client.on("messageCreate", async (message) => {
 
   if (message.content.startsWith("!faktury")) {
     await processFakturyCommand(message);
+  }
+
+  if (message.content.startsWith("!sowa")) {
+    await processSowaCommand(message);
   }
 });
 
