@@ -40,7 +40,15 @@ export async function executeSowaCommand({ command, args = [], text = "" }) {
       signal: controller.signal,
     });
 
-    const payload = await response.json().catch(() => ({}));
+    const contentType = (response.headers.get("content-type") || "").toLowerCase();
+    const isJson = contentType.includes("application/json");
+    const payload = isJson ? await response.json().catch(() => ({})) : {};
+
+    if (!isJson) {
+      throw new Error(
+        `SOWA API zwróciło nie-JSON (content-type: ${contentType || "brak"}). Sprawdź Cloudflare Access/bypass dla endpointu komend.`,
+      );
+    }
 
     if (!response.ok) {
       const message =
@@ -50,6 +58,13 @@ export async function executeSowaCommand({ command, args = [], text = "" }) {
       const error = new Error(message);
       error.status = response.status;
       throw error;
+    }
+
+    if (payload?.ok !== true) {
+      throw new Error(
+        payload?.message ||
+          "SOWA API nie potwierdziło sukcesu (brak pola ok=true).",
+      );
     }
 
     return payload;
@@ -62,4 +77,3 @@ export async function executeSowaCommand({ command, args = [], text = "" }) {
     clearTimeout(timeout);
   }
 }
-
