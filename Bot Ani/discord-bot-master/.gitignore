@@ -9,6 +9,7 @@ yarn-error.log*
 # Runtime data
 .env
 .env.*
+!.env.example
 *.pid
 *.pid.lock
 

@@ -15,10 +15,13 @@
     "dayjs": "^1.11.13",
     "discord.js": "^14.17.3",
     "dotenv": "^16.4.7",
+    "google-auth-library": "^9.15.0",
+    "googleapis": "^144.0.0",
     "node-fetch": "^3.3.2",
     "openai": "^4.79.1",
     "sqlite": "^5.1.1",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"
