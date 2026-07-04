@@ -74,14 +74,10 @@ export async function findHeaderRow(spreadsheetId, sheetName) {
   return { headerRowIndex, columnMap, sheetName: resolvedSheetName };
 }
 
-/**
- * Returns the distinct, non-empty "Zabieg" values currently in the sheet,
- * sorted alphabetically - used to populate the treatment picker in Discord.
- */
-export async function listZabiegCategories(spreadsheetId) {
+async function listDistinctColumnValues(spreadsheetId, columnKey) {
   const { headerRowIndex, columnMap, sheetName } = await findHeaderRow(spreadsheetId);
   const sheets = getSheetsClient();
-  const colLetter = columnIndexToLetter(columnMap.zabieg);
+  const colLetter = columnIndexToLetter(columnMap[columnKey]);
   const startRow = headerRowIndex + 2; // 1-based, first row after header
 
   const res = await sheets.spreadsheets.values.get({
@@ -92,6 +88,22 @@ export async function listZabiegCategories(spreadsheetId) {
   const values = (res.data.values || []).flat().map((v) => (v || "").toString().trim());
   const unique = [...new Set(values.filter(Boolean))];
   return unique.sort((a, b) => a.localeCompare(b, "pl"));
+}
+
+/**
+ * Returns the distinct, non-empty "Zabieg" values currently in the sheet,
+ * sorted alphabetically - used to populate the treatment picker in Discord.
+ */
+export async function listZabiegCategories(spreadsheetId) {
+  return listDistinctColumnValues(spreadsheetId, "zabieg");
+}
+
+/**
+ * Returns the distinct, non-empty "Klient" values currently in the sheet,
+ * sorted alphabetically - used to populate the client picker in Discord.
+ */
+export async function listKlienci(spreadsheetId) {
+  return listDistinctColumnValues(spreadsheetId, "klient");
 }
 
 /**

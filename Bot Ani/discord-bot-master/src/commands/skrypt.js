@@ -1,7 +1,14 @@
-import { EmbedBuilder, StringSelectMenuBuilder, ActionRowBuilder } from "discord.js";
+import {
+  EmbedBuilder,
+  StringSelectMenuBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+} from "discord.js";
 import { GOOGLE_SCRIPTS_SHEET_ID, GOOGLE_SCRIPTS_DRIVE_FOLDER_ID } from "../config.js";
 import {
   listZabiegCategories,
+  listKlienci,
   findReferenceScriptForZabieg,
   appendScriptRow,
 } from "../utils/scriptSheet.js";
@@ -18,7 +25,14 @@ const SHEET_URL = `https://docs.google.com/spreadsheets/d/${GOOGLE_SCRIPTS_SHEET
 const MAX_TREATMENTS_PER_SCRIPT = 2;
 const MAX_VARIANTS = 3;
 const DEFAULT_VARIANTS = 2;
-const PROMPT_TIMEOUT_MS = 60000;
+// Text prompts (free-form answers, e.g. brief link) need the user to type and
+// send a message, so they get a slightly longer window than component clicks.
+const TEXT_PROMPT_TIMEOUT_MS = 90000;
+// Component interactions (select menus / buttons) resolve with a single click,
+// no typing required, so they can afford a generous window without any of the
+// prior back-and-forth messages piling up in the channel.
+const COMPONENT_TIMEOUT_MS = 120000;
+const OTHER_VALUE = "__other__";
 
 function errorEmbed(desc) {
   return new EmbedBuilder().setColor("#FF0000").setDescription(`❌ ${desc}`);
@@ -59,7 +73,7 @@ async function askText(message, promptText) {
     const collected = await message.channel.awaitMessages({
       filter,
       max: 1,
-      time: PROMPT_TIMEOUT_MS,
+      time: TEXT_PROMPT_TIMEOUT_MS,
       errors: ["time"],
     });
     return collected.first().content.trim();
@@ -70,42 +84,128 @@ async function askText(message, promptText) {
 }
 
 /**
+ * Single-message select menu with a built-in "Inne" (other) option so the
+ * operator can always type a brand-new value (new client, new treatment)
+ * instead of being limited to what's already in the sheet. Resolves via one
+ * click (interaction.update), so it never spams follow-up messages and, since
+ * each menu's customId is unique per invocation, two people can run !skrypt
+ * concurrently in the same channel without colliding.
+ */
+async function askOptionsOrOther(message, { options, placeholder, maxValues, otherPrompt }) {
+  const limitedOptions = options.slice(0, 24);
+  const selectOptions = [
+    ...limitedOptions.map((o) => ({ label: o.slice(0, 100), value: o })),
+    { label: "Inne (wpisz nowe)", value: OTHER_VALUE, description: "Wpisz wartość ręcznie" },
+  ];
+
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId(`skrypt_select_${Date.now()}`)
+    .setPlaceholder(placeholder)
+    .setMinValues(1)
+    .setMaxValues(Math.min(maxValues, selectOptions.length))
+    .addOptions(selectOptions);
+
+  const row = new ActionRowBuilder().addComponents(selectMenu);
+  const selectMessage = await message.channel.send({ content: `📋 ${placeholder}`, components: [row] });
+
+  const filter = (interaction) =>
+    interaction.customId === selectMenu.data.custom_id && interaction.user.id === message.author.id;
+
+  let values;
+  try {
+    const interaction = await selectMessage.awaitMessageComponent({ filter, time: COMPONENT_TIMEOUT_MS });
+    values = interaction.values;
+    await interaction.update({ content: `✅ Wybrano: ${values.join(", ")}`, components: [] });
+  } catch {
+    await selectMessage.edit({ content: "⌛ Czas minął, nie dokonano wyboru.", components: [] }).catch(() => {});
+    return null;
+  }
+
+  if (values.includes(OTHER_VALUE)) {
+    const concrete = values.filter((v) => v !== OTHER_VALUE);
+    const typed = await askText(message, otherPrompt);
+    if (typed === null) return null;
+    const typedValues = typed.split(",").map((s) => s.trim()).filter(Boolean);
+    return [...concrete, ...typedValues];
+  }
+
+  return values;
+}
+
+async function askClient(message) {
+  let klienci = [];
+  try {
+    klienci = await listKlienci(GOOGLE_SCRIPTS_SHEET_ID);
+  } catch (err) {
+    console.warn("Nie udało się pobrać listy klientów, przechodzę na pole tekstowe:", err.message);
+  }
+
+  if (klienci.length === 0) {
+    return askText(message, "Podaj nazwę klienta:");
+  }
+
+  const values = await askOptionsOrOther(message, {
+    options: klienci,
+    placeholder: "Wybierz klienta:",
+    maxValues: 1,
+    otherPrompt: "Podaj nazwę nowego klienta:",
+  });
+
+  return values ? values[0] : null;
+}
+
+/**
+ * Single-message button row for the 1-3 variant count - a plain click
+ * instead of typing a number, with the default visually highlighted.
+ */
+async function askVariantCount(message) {
+  const row = new ActionRowBuilder().addComponents(
+    Array.from({ length: MAX_VARIANTS }, (_, idx) => idx + 1).map((n) =>
+      new ButtonBuilder()
+        .setCustomId(`skrypt_warianty_${n}_${Date.now()}`)
+        .setLabel(n === DEFAULT_VARIANTS ? `${n} (domyślnie)` : `${n}`)
+        .setStyle(n === DEFAULT_VARIANTS ? ButtonStyle.Primary : ButtonStyle.Secondary)
+    )
+  );
+
+  const promptMessage = await message.channel.send({
+    content: "🔢 Ile wariantów skryptu wygenerować?",
+    components: [row],
+  });
+
+  const filter = (interaction) =>
+    interaction.user.id === message.author.id && interaction.customId.startsWith("skrypt_warianty_");
+
+  try {
+    const interaction = await promptMessage.awaitMessageComponent({ filter, time: COMPONENT_TIMEOUT_MS });
+    const n = parseInt(interaction.customId.split("_")[2], 10);
+    await interaction.update({ content: `✅ Liczba wariantów: ${n}`, components: [] });
+    return n;
+  } catch {
+    await promptMessage
+      .edit({ content: `⌛ Czas minął — użyto wartości domyślnej (${DEFAULT_VARIANTS}).`, components: [] })
+      .catch(() => {});
+    return DEFAULT_VARIANTS;
+  }
+}
+
+/**
  * Asks the user to pick 1-2 treatments. Uses a native multi-select dropdown
- * when the live category list from the sheet fits Discord's 25-option limit;
- * otherwise falls back to a paginated numbered list (same style as the
- * existing handleBoardSelection() pattern in utils/helpers.js).
+ * (with a built-in "Inne" option) when the live category list from the sheet
+ * fits Discord's 25-option limit; otherwise falls back to a paginated
+ * numbered list (same style as the existing handleBoardSelection() pattern
+ * in utils/helpers.js) where typing a name instead of a number is treated as
+ * a new, custom treatment.
  */
 async function askTreatments(message, categories) {
-  const maxValues = Math.min(MAX_TREATMENTS_PER_SCRIPT, categories.length);
-
-  if (categories.length <= 25) {
-    const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId(`skrypt_zabieg_select_${Date.now()}`)
-      .setPlaceholder(`Wybierz 1-${maxValues} zabiegi`)
-      .setMinValues(1)
-      .setMaxValues(maxValues)
-      .addOptions(categories.map((c) => ({ label: c.slice(0, 100), value: c })));
-
-    const row = new ActionRowBuilder().addComponents(selectMenu);
-    const selectMessage = await message.channel.send({
-      content: `📋 Wybierz zabieg (maks. ${MAX_TREATMENTS_PER_SCRIPT}):`,
-      components: [row],
+  if (categories.length <= 24) {
+    const values = await askOptionsOrOther(message, {
+      options: categories,
+      placeholder: `Wybierz zabieg (maks. ${MAX_TREATMENTS_PER_SCRIPT}):`,
+      maxValues: MAX_TREATMENTS_PER_SCRIPT,
+      otherPrompt: "Podaj nazwę nowego zabiegu (jeśli więcej niż jeden, oddziel przecinkiem):",
     });
-
-    const filter = (interaction) =>
-      interaction.customId === selectMenu.data.custom_id && interaction.user.id === message.author.id;
-
-    try {
-      const interaction = await selectMessage.awaitMessageComponent({ filter, time: PROMPT_TIMEOUT_MS });
-      await interaction.update({
-        content: `✅ Wybrane zabiegi: ${interaction.values.join(", ")}`,
-        components: [],
-      });
-      return interaction.values;
-    } catch {
-      await selectMessage.edit({ content: "⌛ Czas minął, nie wybrano zabiegu.", components: [] });
-      return null;
-    }
+    return values ? values.slice(0, MAX_TREATMENTS_PER_SCRIPT) : null;
   }
 
   const pageSize = 25;
@@ -118,9 +218,8 @@ async function askTreatments(message, categories) {
     await message.channel.send({
       embeds: [
         infoEmbed(
-          `Wybierz zabieg (numer, max ${MAX_TREATMENTS_PER_SCRIPT} po przecinku)${
-            hasMore ? ' lub napisz "więcej"' : ""
-          }:\n\n${listText}`
+          `Wybierz zabieg (numer, max ${MAX_TREATMENTS_PER_SCRIPT} po przecinku), wpisz nazwę nowego zabiegu,` +
+            `${hasMore ? ' lub napisz "więcej"' : ""}:\n\n${listText}`
         ),
       ],
     });
@@ -131,7 +230,7 @@ async function askTreatments(message, categories) {
       collected = await message.channel.awaitMessages({
         filter,
         max: 1,
-        time: PROMPT_TIMEOUT_MS,
+        time: TEXT_PROMPT_TIMEOUT_MS,
         errors: ["time"],
       });
     } catch {
@@ -139,25 +238,37 @@ async function askTreatments(message, categories) {
       return null;
     }
 
-    const content = collected.first().content.trim().toLowerCase();
-    if (hasMore && (content === "więcej" || content === "wiecej")) {
+    const content = collected.first().content.trim();
+    const lower = content.toLowerCase();
+    if (hasMore && (lower === "więcej" || lower === "wiecej")) {
       page++;
       continue;
     }
 
-    const nums = content
-      .split(",")
-      .map((s) => parseInt(s.trim(), 10))
-      .filter((n) => !Number.isNaN(n) && n > 0 && n <= categories.length);
+    const isNumberList = /^\d+(\s*,\s*\d+)*$/.test(content);
+    if (isNumberList) {
+      const nums = content
+        .split(",")
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => n > 0 && n <= categories.length);
 
-    if (nums.length === 0 || nums.length > MAX_TREATMENTS_PER_SCRIPT) {
-      await message.channel.send({
-        embeds: [errorEmbed(`Podaj 1-${MAX_TREATMENTS_PER_SCRIPT} poprawne numery, oddzielone przecinkiem.`)],
-      });
-      continue;
+      if (nums.length === 0 || nums.length > MAX_TREATMENTS_PER_SCRIPT) {
+        await message.channel.send({
+          embeds: [errorEmbed(`Podaj 1-${MAX_TREATMENTS_PER_SCRIPT} poprawne numery, oddzielone przecinkiem.`)],
+        });
+        continue;
+      }
+      return nums.map((n) => categories[n - 1]);
     }
 
-    return nums.map((n) => categories[n - 1]);
+    // Not a number list - treat the raw text as one or more new, custom
+    // treatment names (this is the "Inne" path for the paginated fallback).
+    const custom = content.split(",").map((s) => s.trim()).filter(Boolean).slice(0, MAX_TREATMENTS_PER_SCRIPT);
+    if (custom.length === 0) {
+      await message.channel.send({ embeds: [errorEmbed("Podaj co najmniej jeden zabieg.")] });
+      continue;
+    }
+    return custom;
   }
 }
 
@@ -180,19 +291,13 @@ export async function processSkryptCommand(message) {
 
     let klient = inline.klient;
     if (!klient) {
-      klient = await askText(message, "Podaj nazwę klienta:");
+      klient = await askClient(message);
       if (!klient) return;
     }
 
     let warianty = inline.warianty ? parseInt(inline.warianty, 10) : NaN;
     if (Number.isNaN(warianty)) {
-      const answer = await askText(
-        message,
-        `Ile wariantów skryptu wygenerować? (1-${MAX_VARIANTS}, domyślnie ${DEFAULT_VARIANTS}. Wpisz liczbę lub "pomiń").`
-      );
-      if (answer === null) return;
-      const parsedNum = parseInt(answer, 10);
-      warianty = Number.isNaN(parsedNum) ? DEFAULT_VARIANTS : parsedNum;
+      warianty = await askVariantCount(message);
     }
     warianty = Math.min(MAX_VARIANTS, Math.max(1, warianty));
 
@@ -210,22 +315,12 @@ export async function processSkryptCommand(message) {
     }
     await categoriesMsg.delete().catch(() => {});
 
-    if (categories.length === 0) {
-      return message.channel.send({
-        embeds: [errorEmbed("Arkusz skryptów nie zawiera jeszcze żadnej kategorii zabiegu.")],
-      });
-    }
-
     let zabiegi = inline.zabiegi;
     if (zabiegi) {
-      zabiegi = zabiegi
-        .map((z) => categories.find((c) => c.toLowerCase() === z.toLowerCase()))
-        .filter(Boolean);
-      if (zabiegi.length === 0) {
-        return message.channel.send({
-          embeds: [errorEmbed("Podane zabiegi nie pasują do żadnej kategorii w arkuszu.")],
-        });
-      }
+      zabiegi = zabiegi.map((z) => {
+        const known = categories.find((c) => c.toLowerCase() === z.toLowerCase());
+        return known || z; // unknown value = a new, custom treatment name
+      });
     } else {
       zabiegi = await askTreatments(message, categories);
       if (!zabiegi) return;
