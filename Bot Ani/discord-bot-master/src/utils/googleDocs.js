@@ -160,7 +160,10 @@ export async function createFormattedScriptDoc(title, text, spans) {
  */
 export async function moveDocToFolder(fileId, targetFolderId) {
   const drive = getDriveClient();
-  const file = await drive.files.get({ fileId, fields: "parents" });
+  // supportsAllDrives is required whenever a Shared Drive is involved (either
+  // the file or, as here, the target parent folder) - without it the Drive
+  // API v3 silently reports "File not found" even with full Manager access.
+  const file = await drive.files.get({ fileId, fields: "parents", supportsAllDrives: true });
   const previousParents = (file.data.parents || []).join(",");
 
   await drive.files.update({
@@ -168,5 +171,6 @@ export async function moveDocToFolder(fileId, targetFolderId) {
     addParents: targetFolderId,
     removeParents: previousParents,
     fields: "id, parents",
+    supportsAllDrives: true,
   });
 }
