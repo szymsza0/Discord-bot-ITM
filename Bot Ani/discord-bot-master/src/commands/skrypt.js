@@ -20,6 +20,9 @@ import {
   moveDocToFolder,
 } from "../utils/googleDocs.js";
 import { generateScriptVariant, ScriptGenerationError } from "../utils/scriptGenerator.js";
+import { integrateScriptFeedback } from "../utils/feedbackIntegrator.js";
+
+const FEEDBACK_PROMPT_TIMEOUT_MS = 180000;
 
 const SHEET_URL = `https://docs.google.com/spreadsheets/d/${GOOGLE_SCRIPTS_SHEET_ID}/edit`;
 const MAX_TREATMENTS_PER_SCRIPT = 2;
@@ -272,6 +275,60 @@ async function askTreatments(message, categories) {
   }
 }
 
+/**
+ * Optional, best-effort feedback prompt shown right after a successful
+ * generation. Not required - if it times out (or the operator is done),
+ * `!feedback <link> <tekst>` remains available standalone at any later time.
+ */
+async function askForFeedback(message, scriptLink) {
+  await message.channel.send({
+    embeds: [
+      infoEmbed(
+        `💬 Masz feedback do tych skryptów? Napisz go tutaj w ciągu 3 minut, albo później użyj \`!feedback ${scriptLink} <treść>\`.`
+      ),
+    ],
+  });
+
+  const filter = (m) => m.author.id === message.author.id && !m.content.startsWith("!");
+  let collected;
+  try {
+    collected = await message.channel.awaitMessages({
+      filter,
+      max: 1,
+      time: FEEDBACK_PROMPT_TIMEOUT_MS,
+      errors: ["time"],
+    });
+  } catch {
+    return; // no feedback given - fine, it's optional
+  }
+
+  const feedbackText = collected.first().content.trim();
+  if (!feedbackText) return;
+
+  const processingMsg = await message.channel.send({
+    embeds: [infoEmbed("⏳ Analizuję feedback i aktualizuję wytyczne...")],
+  });
+
+  try {
+    const authorName = message.member?.displayName || message.author.username;
+    const result = await integrateScriptFeedback({ feedbackText, scriptLink, authorName });
+
+    const embed = new EmbedBuilder()
+      .setColor(result.hasConflict ? "#FFA500" : "#00FF00")
+      .setTitle(result.hasConflict ? "⚠️ Feedback zapisany (możliwa sprzeczność)" : "✅ Feedback zapisany")
+      .setDescription(result.entryText);
+
+    if (result.hasConflict && result.conflictNote) {
+      embed.addFields({ name: "Do przejrzenia", value: result.conflictNote });
+    }
+
+    await processingMsg.edit({ embeds: [embed] });
+  } catch (err) {
+    console.error("Error integrating feedback:", err);
+    await processingMsg.edit({ embeds: [errorEmbed(`Nie udało się zapisać feedbacku: ${err.message}`)] });
+  }
+}
+
 export async function processSkryptCommand(message) {
   try {
     const content = message.content.slice("!skrypt".length).trim();
@@ -407,15 +464,14 @@ export async function processSkryptCommand(message) {
       console.warn("Nie udało się pobrać przykładowego skryptu referencyjnego:", err);
     }
 
-    const createdDocs = [];
+    const variants = [];
     const previousVariantSummaries = [];
 
     for (let i = 1; i <= warianty; i++) {
       await processingMsg.edit({ embeds: [infoEmbed(`⏳ Generuję wariant ${i}/${warianty}...`)] });
 
-      let variant;
       try {
-        variant = await generateScriptVariant({
+        const variant = await generateScriptVariant({
           templateRulesText: template.rulesText,
           briefsText,
           referenceScriptText,
@@ -425,6 +481,8 @@ export async function processSkryptCommand(message) {
           totalVariants: warianty,
           previousVariantSummaries,
         });
+        variants.push(variant);
+        previousVariantSummaries.push(`${variant.variantLabel} - hook: "${variant.rolka.hook}"`);
       } catch (err) {
         if (err instanceof ScriptGenerationError) {
           await message.channel.send({
@@ -434,42 +492,34 @@ export async function processSkryptCommand(message) {
         }
         throw err;
       }
-
-      previousVariantSummaries.push(`${variant.variantLabel} - hook: "${variant.rolka.hook}"`);
-
-      const docTitle = `${klient} - ${zabiegi.join(" + ")} - skrypty i wskazówki | ITM${
-        warianty > 1 ? ` (Wariant ${i} z ${warianty})` : ""
-      }`;
-
-      try {
-        const { text, spans } = buildScriptDocContent(docTitle, variant, template.recordingInstructionsText);
-        const docId = await createFormattedScriptDoc(docTitle, text, spans);
-        await moveDocToFolder(docId, GOOGLE_SCRIPTS_DRIVE_FOLDER_ID);
-        const docUrl = `https://docs.google.com/document/d/${docId}/edit`;
-
-        await appendScriptRow(GOOGLE_SCRIPTS_SHEET_ID, {
-          czyj: message.member?.displayName || message.author.username,
-          klient,
-          briefLink: briefLinks[0],
-          skryptLink: docUrl,
-          zabieg: zabiegi.join(" + "),
-        });
-
-        createdDocs.push({ title: docTitle, url: docUrl });
-      } catch (err) {
-        console.error(`Error creating doc for variant ${i}:`, err);
-        await message.channel.send({
-          embeds: [
-            errorEmbed(
-              `Wariant ${i}: skrypt wygenerowany, ale nie udało się zapisać dokumentu/arkusza: ${err.message}`
-            ),
-          ],
-        });
-      }
     }
 
-    if (createdDocs.length === 0) {
-      return processingMsg.edit({ embeds: [errorEmbed("Nie udało się utworzyć żadnego skryptu.")] });
+    if (variants.length === 0) {
+      return processingMsg.edit({ embeds: [errorEmbed("Nie udało się wygenerować żadnego wariantu skryptu.")] });
+    }
+
+    // All variants from this one request go into a single doc/sheet row, not
+    // one per variant, so one !skrypt call always yields exactly one link.
+    const docTitle = `${klient} - ${zabiegi.join(" + ")} - skrypty i wskazówki | ITM`;
+    let docUrl;
+    try {
+      const { text, spans } = buildScriptDocContent(docTitle, variants, template.recordingInstructionsText);
+      const docId = await createFormattedScriptDoc(docTitle, text, spans);
+      await moveDocToFolder(docId, GOOGLE_SCRIPTS_DRIVE_FOLDER_ID);
+      docUrl = `https://docs.google.com/document/d/${docId}/edit`;
+
+      await appendScriptRow(GOOGLE_SCRIPTS_SHEET_ID, {
+        czyj: message.member?.displayName || message.author.username,
+        klient,
+        briefLink: briefLinks[0],
+        skryptLink: docUrl,
+        zabieg: zabiegi.join(" + "),
+      });
+    } catch (err) {
+      console.error("Error creating script doc:", err);
+      return processingMsg.edit({
+        embeds: [errorEmbed(`Skrypty wygenerowane, ale nie udało się zapisać dokumentu/arkusza: ${err.message}`)],
+      });
     }
 
     await processingMsg.edit({
@@ -478,11 +528,13 @@ export async function processSkryptCommand(message) {
           .setColor("#00FF00")
           .setTitle("🎊 Skrypty gotowe")
           .setDescription(
-            createdDocs.map((d, i) => `**${i + 1}.** [${d.title}](${d.url})`).join("\n") +
+            `[${docTitle}](${docUrl})\n\n(${variants.length}/${warianty} wariantów w jednym dokumencie)` +
               `\n\n📊 [Zobacz w arkuszu](${SHEET_URL})`
           ),
       ],
     });
+
+    await askForFeedback(message, docUrl);
   } catch (error) {
     console.error("Error processing skrypt command:", error);
     try {

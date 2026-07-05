@@ -11,6 +11,7 @@ import { processLekcjeCommand } from "./commands/lekcje.js"; // Dodany import
 import { processFakturyCommand } from "./commands/faktury.js"; //dodany import
 import { processSowaCommand } from "./commands/sowa.js";
 import { processSkryptCommand } from "./commands/skrypt.js";
+import { processFeedbackCommand } from "./commands/feedback.js";
 
 import { initDatabase } from "./utils/database.js";
 
@@ -84,6 +85,10 @@ client.on("messageCreate", async (message) => {
 
   if (message.content.startsWith("!skrypt")) {
     await processSkryptCommand(message);
+  }
+
+  if (message.content.startsWith("!feedback")) {
+    await processFeedbackCommand(message);
   }
 });
 
