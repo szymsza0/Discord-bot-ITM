@@ -1,4 +1,5 @@
 import { Client, GatewayIntentBits } from "discord.js";
+import cron from "node-cron";
 import { DISCORD_TOKEN } from "./config.js";
 import { executeBoards } from "./commands/boards.js";
 import { executeLists } from "./commands/lists.js";
@@ -12,7 +13,10 @@ import { processFakturyCommand } from "./commands/faktury.js"; //dodany import
 import { processSowaCommand } from "./commands/sowa.js";
 import { processSkryptCommand } from "./commands/skrypt.js";
 import { processFeedbackCommand } from "./commands/feedback.js";
-import { processDiscoveryCommand } from "./commands/discovery.js";
+import {
+  processDiscoveryCommand,
+  runScheduledDiscovery,
+} from "./commands/discovery.js";
 
 import { initDatabase } from "./utils/database.js";
 
@@ -100,6 +104,18 @@ client.on("messageCreate", async (message) => {
 client.once("ready", () => {
   console.log(
     `✅ Logged in as ${client.user.tag} and can be used in any Discord server.`
+  );
+
+  // Codzienny !discovery dla Agnieszki i Szymona (patrz SCHEDULED_TARGET_NAMES
+  // w commands/discovery.js) na kanał DISCOVERY_CHANNEL_ID.
+  cron.schedule(
+    "30 7 * * *",
+    () => {
+      runScheduledDiscovery(client).catch((error) =>
+        console.error("🚨 Błąd w zaplanowanym !discovery:", error)
+      );
+    },
+    { timezone: "Europe/Warsaw" }
   );
 });
 
