@@ -12,6 +12,7 @@ import { processFakturyCommand } from "./commands/faktury.js"; //dodany import
 import { processSowaCommand } from "./commands/sowa.js";
 import { processSkryptCommand } from "./commands/skrypt.js";
 import { processFeedbackCommand } from "./commands/feedback.js";
+import { processDiscoveryCommand } from "./commands/discovery.js";
 
 import { initDatabase } from "./utils/database.js";
 
@@ -89,6 +90,10 @@ client.on("messageCreate", async (message) => {
 
   if (message.content.startsWith("!feedback")) {
     await processFeedbackCommand(message);
+  }
+
+  if (message.content.startsWith("!discovery")) {
+    await processDiscoveryCommand(message);
   }
 });
 

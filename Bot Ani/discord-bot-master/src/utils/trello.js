@@ -283,6 +283,50 @@ export async function getListIdByName(boardId, listName) {
   }
 }
 
+/**
+ * Pobiera członków przypisanych do board'a (do wyboru interaktywnego, np. w !discovery)
+ * @param {string} boardId - ID board'a
+ * @returns {Promise<Array|null>} - Array członków board'a lub null przy błędzie
+ */
+export async function fetchBoardMembers(boardId) {
+  try {
+    const url = `${TRELLO_API_BASE}/boards/${boardId}/members?key=${TRELLO_KEY}&token=${TRELLO_TOKEN}&fields=fullName,username`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      console.error(`❌ Trello API error fetching board members: ${response.status}`);
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("🚨 Error fetching Trello board members:", error);
+    return null;
+  }
+}
+
+/**
+ * Pobiera otwarte karty (nie zarchiwizowane) z danej listy
+ * @param {string} listId - ID listy
+ * @returns {Promise<Array>} - Array kart (pusty jeśli błąd)
+ */
+export async function fetchListCards(listId) {
+  try {
+    const url = `${TRELLO_API_BASE}/lists/${listId}/cards?key=${TRELLO_KEY}&token=${TRELLO_TOKEN}&fields=name,url,due,dueComplete,idMembers,closed`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      console.error(`❌ Trello API error fetching cards for list ${listId}: ${response.status}`);
+      return [];
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error(`🚨 Error fetching cards for list ${listId}:`, error);
+    return [];
+  }
+}
+
 export async function getTrelloMemberId(username) {
   try {
     const url = `https://api.trello.com/1/members/${username}?key=${TRELLO_KEY}&token=${TRELLO_TOKEN}`;
@@ -538,7 +582,7 @@ function filterCardsByMember(cards, memberName) {
  * @param {string} name - Nazwa do normalizacji
  * @returns {string} - Znormalizowana nazwa
  */
-function normalizeName(name) {
+export function normalizeName(name) {
   if (!name) return "";
   
   return name
