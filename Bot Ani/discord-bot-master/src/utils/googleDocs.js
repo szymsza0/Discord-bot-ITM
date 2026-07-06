@@ -2,8 +2,14 @@ import { getDocsClient, getDriveClient } from "./googleAuth.js";
 
 /**
  * Reads the plain-text content of any Google Doc (or Doc-convertible file)
- * via Drive export. Used for the template/rules doc, brief docs, and
- * reference script docs - all read-only.
+ * via Drive export. Used for one-off reads of brief docs and reference
+ * script docs (which may not even be native Google Docs).
+ *
+ * Do NOT use this for a doc this app also writes to (e.g. the script
+ * template/feedback doc) - Drive's export conversion is cached and can lag
+ * well behind the doc's real content right after an API edit, so a write
+ * followed immediately by this read can appear to silently do nothing. Use
+ * fetchGoogleDocPlainText (Docs API, no export cache) for those instead.
  */
 export async function fetchDocPlainText(docId) {
   const drive = getDriveClient();
@@ -12,6 +18,38 @@ export async function fetchDocPlainText(docId) {
     { responseType: "text" }
   );
   return typeof response.data === "string" ? response.data : String(response.data);
+}
+
+function extractParagraphText(paragraph) {
+  return (paragraph.elements || []).map((el) => el.textRun?.content || "").join("");
+}
+
+function extractBodyText(content) {
+  let text = "";
+  for (const element of content || []) {
+    if (element.paragraph) {
+      text += extractParagraphText(element.paragraph);
+    } else if (element.table) {
+      for (const row of element.table.tableRows || []) {
+        for (const cell of row.tableCells || []) {
+          text += extractBodyText(cell.content);
+        }
+      }
+    }
+  }
+  return text;
+}
+
+/**
+ * Reads the plain-text content of a native Google Doc directly via the Docs
+ * API (documents.get), bypassing Drive's export conversion entirely - so a
+ * write made moments earlier via documents.batchUpdate is always reflected
+ * immediately. Only works for native Google Docs (application/vnd.google-apps.document).
+ */
+export async function fetchGoogleDocPlainText(docId) {
+  const docs = getDocsClient();
+  const res = await docs.documents.get({ documentId: docId });
+  return extractBodyText(res.data.body?.content);
 }
 
 /**

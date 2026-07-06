@@ -1,11 +1,17 @@
 import { getSheetsClient } from "./googleAuth.js";
 
-const HEADER_LABELS = {
+const REQUIRED_HEADER_LABELS = {
   czyj: "Czyj?",
   klient: "Klient",
   briefLink: "Link do briefu",
   skryptLink: "Link do skryptu",
   zabieg: "Zabieg",
+};
+
+// Optional: populated when present, but its absence doesn't break older
+// copies of the sheet that don't have this column yet.
+const OPTIONAL_HEADER_LABELS = {
+  data: "Data",
 };
 
 function columnIndexToLetter(index) {
@@ -52,7 +58,7 @@ export async function findHeaderRow(spreadsheetId, sheetName) {
 
   const rows = res.data.values || [];
   const headerRowIndex = rows.findIndex((row) =>
-    row.some((cell) => normalize(cell) === normalize(HEADER_LABELS.zabieg))
+    row.some((cell) => normalize(cell) === normalize(REQUIRED_HEADER_LABELS.zabieg))
   );
 
   if (headerRowIndex === -1) {
@@ -63,12 +69,16 @@ export async function findHeaderRow(spreadsheetId, sheetName) {
 
   const headerRow = rows[headerRowIndex];
   const columnMap = {};
-  for (const [key, label] of Object.entries(HEADER_LABELS)) {
+  for (const [key, label] of Object.entries(REQUIRED_HEADER_LABELS)) {
     const colIndex = headerRow.findIndex((cell) => normalize(cell) === normalize(label));
     if (colIndex === -1) {
       throw new Error(`Nie znaleziono kolumny "${label}" w naglowku arkusza skryptow.`);
     }
     columnMap[key] = colIndex;
+  }
+  for (const [key, label] of Object.entries(OPTIONAL_HEADER_LABELS)) {
+    const colIndex = headerRow.findIndex((cell) => normalize(cell) === normalize(label));
+    if (colIndex !== -1) columnMap[key] = colIndex;
   }
 
   return { headerRowIndex, columnMap, sheetName: resolvedSheetName };
@@ -133,10 +143,20 @@ export async function findReferenceScriptForZabieg(spreadsheetId, zabieg) {
   };
 }
 
+function todayDateStr() {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}.${mm}.${yy}`;
+}
+
 /**
  * Appends one new row to the scripts sheet using values.append, which finds
  * the end of the contiguous table itself starting from the header row - the
- * blank rows above the header are never touched.
+ * blank rows above the header are never touched. Populates the "Data" column
+ * with today's date if that column exists in the sheet (older copies of the
+ * sheet without it are unaffected).
  */
 export async function appendScriptRow(spreadsheetId, { czyj, klient, briefLink, skryptLink, zabieg }) {
   const { headerRowIndex, columnMap, sheetName } = await findHeaderRow(spreadsheetId);
@@ -148,6 +168,9 @@ export async function appendScriptRow(spreadsheetId, { czyj, klient, briefLink, 
   row[columnMap.briefLink] = briefLink || "";
   row[columnMap.skryptLink] = skryptLink || "";
   row[columnMap.zabieg] = zabieg || "";
+  if (columnMap.data !== undefined) {
+    row[columnMap.data] = todayDateStr();
+  }
   for (let i = 0; i < row.length; i++) {
     if (row[i] === undefined) row[i] = "";
   }

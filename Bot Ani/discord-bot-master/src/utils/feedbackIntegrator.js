@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { ANTHROPIC_API_KEY, GOOGLE_SCRIPT_TEMPLATE_DOC_ID } from "../config.js";
 import { getScriptTemplate, FEEDBACK_SECTION_HEADING } from "./scriptTemplate.js";
 import { getDocsClient } from "./googleAuth.js";
-import { fetchDocPlainText } from "./googleDocs.js";
+import { fetchGoogleDocPlainText } from "./googleDocs.js";
 
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 // Reasoning about whether new feedback contradicts existing guidance (and how
@@ -87,7 +87,7 @@ export async function integrateScriptFeedback({ feedbackText, scriptLink, author
 
 async function appendFeedbackJournalEntry(journalEntry) {
   const docs = getDocsClient();
-  const fullText = await fetchDocPlainText(GOOGLE_SCRIPT_TEMPLATE_DOC_ID);
+  const fullText = await fetchGoogleDocPlainText(GOOGLE_SCRIPT_TEMPLATE_DOC_ID);
 
   // insertText with endOfSegmentLocation appends at the true end of the doc
   // body without needing to compute any character indices - safe regardless

@@ -1,5 +1,5 @@
 import { GOOGLE_SCRIPT_TEMPLATE_DOC_ID } from "../config.js";
-import { fetchDocPlainText } from "./googleDocs.js";
+import { fetchGoogleDocPlainText } from "./googleDocs.js";
 
 const INSTRUCTIONS_MARKER = "Zalacznik: wskazowki nagraniowe dla klienta";
 // Kept as a fixed placeholder heading only - the template doc is a
@@ -44,7 +44,7 @@ let cachedTemplate = null;
 export async function getScriptTemplate({ forceRefresh = false } = {}) {
   if (cachedTemplate && !forceRefresh) return cachedTemplate;
 
-  const fullText = await fetchDocPlainText(GOOGLE_SCRIPT_TEMPLATE_DOC_ID);
+  const fullText = await fetchGoogleDocPlainText(GOOGLE_SCRIPT_TEMPLATE_DOC_ID);
   const normalizedFull = stripPolishDiacritics(fullText);
 
   const instructionsIndex = findMarker(normalizedFull, INSTRUCTIONS_MARKER);

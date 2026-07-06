@@ -1,5 +1,8 @@
 import { EmbedBuilder } from "discord.js";
 import { integrateScriptFeedback } from "../utils/feedbackIntegrator.js";
+import { GOOGLE_SCRIPT_TEMPLATE_DOC_ID } from "../config.js";
+
+const TEMPLATE_DOC_URL = `https://docs.google.com/document/d/${GOOGLE_SCRIPT_TEMPLATE_DOC_ID}/edit`;
 
 function extractFirstUrl(text) {
   const match = text.match(/https?:\/\/\S+/);
@@ -44,7 +47,9 @@ export async function processFeedbackCommand(message) {
     const embed = new EmbedBuilder()
       .setColor(result.hasConflict ? "#FFA500" : "#00FF00")
       .setTitle(result.hasConflict ? "⚠️ Feedback zapisany (możliwa sprzeczność)" : "✅ Feedback zapisany")
-      .setDescription(result.entryText);
+      .setDescription(
+        `${result.entryText}\n\n📄 Zapisano w sekcji "Uwagi z feedbacku" w [dokumencie wytycznych](${TEMPLATE_DOC_URL}).`
+      );
 
     if (result.hasConflict && result.conflictNote) {
       embed.addFields({ name: "Do przejrzenia", value: result.conflictNote });
