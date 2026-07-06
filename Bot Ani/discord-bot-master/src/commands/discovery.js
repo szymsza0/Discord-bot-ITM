@@ -5,7 +5,7 @@ import {
   ActionRowBuilder,
 } from "discord.js";
 import {
-  getBoardIdByName,
+  fetchTrelloBoardDetails,
   fetchTrelloLists,
   fetchBoardMembers,
   fetchListCards,
@@ -21,7 +21,9 @@ dayjs.extend(timezone);
 dayjs.locale("pl");
 dayjs.tz.setDefault("Europe/Warsaw");
 
-const CRM_BOARD_NAME = "CRM";
+// https://trello.com/b/DfUfi8d6/itm-crm - board resolved by shortLink instead
+// of by name search, since Trello lets a shortLink stand in for a board ID.
+const CRM_BOARD_SHORT_LINK = "DfUfi8d6";
 // Listy skanowane w !discovery. Dopasowanie ignoruje wielkość liter i
 // polskie znaki diakrytyczne (patrz isListMatch), więc realne nazwy list
 // w Trello mogą mieć polskie znaki ("Oferta do wysłania" itd.).
@@ -104,19 +106,21 @@ async function askMember(message, members) {
 export async function processDiscoveryCommand(message) {
   try {
     const processingMsg = await message.reply({
-      embeds: [infoEmbed(`⏳ Szukam board'a **${CRM_BOARD_NAME}**...`)],
+      embeds: [infoEmbed("⏳ Wczytuję board ITM CRM...")],
     });
 
-    const boardId = await getBoardIdByName(CRM_BOARD_NAME, true);
-    if (!boardId || boardId.multiple) {
+    const board = await fetchTrelloBoardDetails(CRM_BOARD_SHORT_LINK);
+    if (!board || !board.id) {
       return processingMsg.edit({
         embeds: [
           errorEmbed(
-            `Nie udało się jednoznacznie znaleźć board'a "${CRM_BOARD_NAME}".`
+            `Nie udało się wczytać board'a ITM CRM (trello.com/b/${CRM_BOARD_SHORT_LINK}).`
           ),
         ],
       });
     }
+    const boardId = board.id;
+    const CRM_BOARD_NAME = board.name || "ITM CRM";
 
     const [lists, members] = await Promise.all([
       fetchTrelloLists(boardId),
