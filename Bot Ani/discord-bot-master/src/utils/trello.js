@@ -588,6 +588,9 @@ export function normalizeName(name) {
   return name
     .toLowerCase()
     .trim()
+    // "ł"/"Ł" nie mają rozkładu NFD (nie są literą + akcentem w Unicode),
+    // więc trzeba je podmienić na "l" ręcznie przed usunięciem akcentów.
+    .replace(/ł/g, "l")
     .normalize("NFD") // Usuń akcenty
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^\w\s]/g, "") // Usuń znaki specjalne
