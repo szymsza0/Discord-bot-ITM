@@ -4,7 +4,13 @@ import { listZabiegiLP, findReferenceLPForZabieg, upsertLPRow } from "../utils/l
 import { getLPTemplate } from "../utils/lpTemplate.js";
 import { fetchDocPlainText } from "../utils/googleDocs.js";
 import { generateLPCopy, LPGenerationError } from "../utils/lpGenerator.js";
-import { parseMaterialyInput, downloadFileuploaderBuffer } from "../utils/fileuploaderMedia.js";
+import {
+  parseMaterialyInput,
+  downloadFileuploaderBuffer,
+  parseFileuploaderLink,
+  listShareFolderFiles,
+  downloadShareFolderFile,
+} from "../utils/fileuploaderMedia.js";
 import { matchMediaToSlots, MediaMatchError, DEFAULT_MEDIA_SLOTS } from "../utils/mediaMatcher.js";
 import { buildPageContent } from "../utils/lpContentBuilder.js";
 import { wpGetPageRawContent, wpUploadMedia, wpCreatePage } from "../utils/wordpressClient.js";
@@ -50,6 +56,26 @@ const MIME_EXTENSIONS = {
 };
 function extensionForMime(mimeType) {
   return MIME_EXTENSIONS[mimeType] || "bin";
+}
+
+// Deliberately conservative: only unambiguous keywords get auto-assigned by
+// filename alone. "before_after_*" is NOT matched this way - "przed"/"po"
+// are far too common as filename substrings (false positives), and Claude
+// vision is genuinely well-suited to telling a before photo from an after
+// photo, so those are always left to matchMediaToSlots() instead.
+const SLOT_FILENAME_KEYWORDS = [
+  { slot: "logo", keywords: ["logo"] },
+  { slot: "hero_image", keywords: ["hero"] },
+  { slot: "offer_image", keywords: ["ofert", "offer"] },
+  { slot: "expert_photo", keywords: ["ekspert", "expert"] },
+];
+
+function matchSlotByFilename(filename) {
+  const normalized = localSlug(filename);
+  for (const { slot, keywords } of SLOT_FILENAME_KEYWORDS) {
+    if (keywords.some((k) => normalized.includes(k))) return slot;
+  }
+  return null;
 }
 
 /**
@@ -204,9 +230,10 @@ export async function processLpCommand(message) {
     if (materialyRaw === null || materialyRaw === undefined) {
       materialyRaw = await askText(
         message,
-        "Podaj link(i) do materiałów z fileuploadera (itm.fileuploader.pl) - po jednym na linię albo po przecinku.\n" +
-          "Zalecany format z etykietą slotu (zero zgadywania): `hero_image: <link>`, `logo: <link>`, `before_after_1: <link>`...\n" +
-          "Możesz też wkleić linki bez etykiety - bot spróbuje dopasować je sam. Jeśli brak materiałów, napisz `brak`."
+        "Podaj materiały:\n" +
+          "• Najprościej: **jeden link do folderu** z fileuploadera (`.../share/...`) - bot sam przeskanuje zawartość i dopasuje pliki do slotów.\n" +
+          "• Albo pojedyncze linki (`.../view/...`), po jednym na linię/przecinek, opcjonalnie z etykietą slotu (zero zgadywania): `hero_image: <link>`, `logo: <link>`, `before_after_1: <link>`...\n" +
+          "Jeśli brak materiałów, napisz `brak`."
       );
       if (materialyRaw === null) return;
     }
@@ -267,34 +294,96 @@ export async function processLpCommand(message) {
     const { labeled, unlabeled } = parseMaterialyInput(materialyRaw);
     const unlabeledUrls = unlabeled.filter((u) => /^https?:\/\//i.test(u));
 
-    await processingMsg.edit({ embeds: [infoEmbed("⏳ Dopasowuję materiały do slotów...")] });
-
     const labeledSlots = new Set(labeled.map((l) => l.slot));
     const remainingSlots = DEFAULT_MEDIA_SLOTS.filter((s) => !labeledSlots.has(s));
 
-    let matchResult = { assignments: [], unmatchedRequiredSlots: remainingSlots, skipped: [] };
-    try {
-      matchResult = await matchMediaToSlots({ unlabeledUrls, remainingSlots });
-    } catch (err) {
-      if (err instanceof MediaMatchError) {
-        await message.channel.send({
-          embeds: [errorEmbed(`Dopasowanie materiałów nie powiodło się: ${err.message}\n\nSzczegóły: ${err.details}`)],
-        });
-      } else {
-        throw err;
-      }
-    }
-
-    // Labeled links win over anything Claude matched for the same slot - an
-    // explicit human label is never second-guessed by the model.
+    // Labeled links always win outright - an explicit human label is never
+    // second-guessed by the model or by filename keyword matching.
     const slotAssignments = new Map();
     for (const { slot, url } of labeled) {
       slotAssignments.set(slot, { url, source: "labeled" });
     }
+
+    // Folder mode: exactly one unlabeled link, and it's a /share/{hash}
+    // folder rather than a single /view/{hash} file - list its contents,
+    // assign the unambiguous ones by filename, and hand the rest to the same
+    // Claude-vision matcher used for individually-pasted unlabeled links.
+    const folderCandidate = unlabeledUrls.length === 1 ? parseFileuploaderLink(unlabeledUrls[0]) : null;
+    const isFolderMode = folderCandidate?.type === "share";
+
+    let matchResult = { assignments: [], unmatchedRequiredSlots: remainingSlots, skipped: [] };
+    const bufferByKey = new Map();
+
+    if (isFolderMode) {
+      await processingMsg.edit({ embeds: [infoEmbed("⏳ Skanuję folder z materiałami...")] });
+      const folderUrl = unlabeledUrls[0];
+
+      let files = [];
+      try {
+        files = await listShareFolderFiles(folderUrl);
+      } catch (err) {
+        console.error("Error listing share folder:", err);
+        await message.channel.send({ embeds: [errorEmbed(`Nie udało się odczytać folderu materiałów: ${err.message}`)] });
+      }
+
+      const slotsStillOpen = remainingSlots.filter((s) => !slotAssignments.has(s));
+      const visionItems = [];
+
+      for (const file of files) {
+        const keywordSlot = matchSlotByFilename(file.name);
+        const canUseKeyword = keywordSlot && slotsStillOpen.includes(keywordSlot) && !slotAssignments.has(keywordSlot);
+
+        try {
+          const { buffer, contentType } = await downloadShareFolderFile(folderUrl, file.path);
+          if (canUseKeyword) {
+            slotAssignments.set(keywordSlot, { buffer, contentType, displayName: file.name, source: "folder-keyword" });
+            slotsStillOpen.splice(slotsStillOpen.indexOf(keywordSlot), 1);
+          } else {
+            const key = `${folderUrl}#${file.name}`;
+            bufferByKey.set(key, { buffer, contentType, displayName: file.name });
+            visionItems.push({ url: key, buffer, contentType, displayName: file.name });
+          }
+        } catch (err) {
+          console.error(`Błąd pobierania pliku "${file.name}" z folderu:`, err);
+        }
+      }
+
+      await processingMsg.edit({ embeds: [infoEmbed("⏳ Dopasowuję pozostałe materiały do slotów...")] });
+
+      try {
+        matchResult = await matchMediaToSlots({ items: visionItems, remainingSlots: slotsStillOpen });
+      } catch (err) {
+        if (err instanceof MediaMatchError) {
+          await message.channel.send({
+            embeds: [errorEmbed(`Dopasowanie materiałów nie powiodło się: ${err.message}\n\nSzczegóły: ${err.details}`)],
+          });
+        } else {
+          throw err;
+        }
+      }
+    } else {
+      await processingMsg.edit({ embeds: [infoEmbed("⏳ Dopasowuję materiały do slotów...")] });
+      try {
+        matchResult = await matchMediaToSlots({ unlabeledUrls, remainingSlots });
+      } catch (err) {
+        if (err instanceof MediaMatchError) {
+          await message.channel.send({
+            embeds: [errorEmbed(`Dopasowanie materiałów nie powiodło się: ${err.message}\n\nSzczegóły: ${err.details}`)],
+          });
+        } else {
+          throw err;
+        }
+      }
+    }
+
     for (const a of matchResult.assignments) {
       if (a.slot && !slotAssignments.has(a.slot)) {
+        const cached = bufferByKey.get(a.sourceUrl);
         slotAssignments.set(a.slot, {
-          url: a.sourceUrl,
+          url: cached ? undefined : a.sourceUrl,
+          buffer: cached?.buffer,
+          contentType: cached?.contentType,
+          displayName: cached?.displayName,
           seoFileName: a.seoFileName,
           seoAltText: a.seoAltText,
           seoTitle: a.seoTitle,
@@ -329,18 +418,25 @@ export async function processLpCommand(message) {
     const uploadFailures = [];
     for (const [slot, info] of slotAssignments) {
       try {
-        const { buffer, contentType } = await downloadFileuploaderBuffer(info.url);
+        // Folder-sourced files (keyword-matched or vision-matched) already
+        // have their bytes from the folder scan above - re-downloading them
+        // here would be a wasted second network round-trip for no reason.
+        const { buffer, contentType } = info.buffer
+          ? { buffer: info.buffer, contentType: info.contentType }
+          : await downloadFileuploaderBuffer(info.url);
         const ext = extensionForMime(contentType);
         const businessSlug = localSlug(copy.business?.name || "itm") || "itm";
 
-        const seoFileName =
-          info.source === "labeled"
-            ? `${businessSlug}-${localSlug(slot)}.${ext}`
-            : info.seoFileName || `${localSlug(slot)}.${ext}`;
-        const seoAltText =
-          info.source === "labeled"
-            ? `${copy.business?.name || ""} - ${slot.replace(/_/g, " ")}`.trim()
-            : info.seoAltText || slot;
+        // "folder-keyword" is treated the same as "labeled" for local SEO
+        // naming - it was a deterministic filename match, not a Claude guess,
+        // so it doesn't have (or need) seoFileName/seoAltText from the model.
+        const isDeterministic = info.source === "labeled" || info.source === "folder-keyword";
+        const seoFileName = isDeterministic
+          ? `${businessSlug}-${localSlug(slot)}.${ext}`
+          : info.seoFileName || `${localSlug(slot)}.${ext}`;
+        const seoAltText = isDeterministic
+          ? `${copy.business?.name || ""} - ${slot.replace(/_/g, " ")}`.trim()
+          : info.seoAltText || slot;
 
         const uploaded = await wpUploadMedia(buffer, seoFileName, contentType, {
           altText: seoAltText,

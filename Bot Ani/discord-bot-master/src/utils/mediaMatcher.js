@@ -90,31 +90,35 @@ function extractAndValidate(response) {
 }
 
 /**
- * Downloads each unlabeled fileuploader link, sends the vision-readable ones
- * to Claude in one tool-use call alongside the list of slots still needing a
- * file, and returns the model's slot assignment + SEO metadata (tool-use +
- * zod + one repair round-trip, same pattern as generateLPCopy /
- * generateScriptVariant). Links whose content-type vision can't read (svg,
+ * Downloads each unlabeled fileuploader link (`unlabeledUrls`) and/or takes
+ * already-fetched files (`items` - e.g. from a /share/ folder scan in lp.js,
+ * where the bytes were already pulled down while listing the folder, so
+ * there's no reason to fetch them a second time), sends the vision-readable
+ * ones to Claude in one tool-use call alongside the list of slots still
+ * needing a file, and returns the model's slot assignment + SEO metadata
+ * (tool-use + zod + one repair round-trip, same pattern as generateLPCopy /
+ * generateScriptVariant). Files whose content-type vision can't read (svg,
  * video, pdf...) come back in `skipped` instead of being sent to the model -
  * there's no way to "look" at them, so they're surfaced for the human
  * report (section 7) instead of silently dropped.
  */
-export async function matchMediaToSlots({ unlabeledUrls, remainingSlots }) {
-  if (unlabeledUrls.length === 0) {
+export async function matchMediaToSlots({ unlabeledUrls = [], items = [], remainingSlots }) {
+  if (unlabeledUrls.length === 0 && items.length === 0) {
     return { assignments: [], unmatchedRequiredSlots: remainingSlots, skipped: [] };
   }
 
-  const downloads = await Promise.all(
+  const fetchedFromUrls = await Promise.all(
     unlabeledUrls.map(async (url) => {
       const { buffer, contentType } = await downloadFileuploaderBuffer(url);
       return { url, buffer, contentType };
     })
   );
+  const downloads = [...fetchedFromUrls, ...items];
 
   const visionReady = downloads.filter((d) => SUPPORTED_VISION_MIME_TYPES.has(d.contentType));
   const skipped = downloads
     .filter((d) => !SUPPORTED_VISION_MIME_TYPES.has(d.contentType))
-    .map((d) => ({ url: d.url, contentType: d.contentType }));
+    .map((d) => ({ url: d.displayName || d.url, contentType: d.contentType }));
 
   if (visionReady.length === 0) {
     return { assignments: [], unmatchedRequiredSlots: remainingSlots, skipped };
