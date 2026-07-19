@@ -9,16 +9,20 @@ const SHEET_NAME = "LP";
 // Data | Czyj? (PM) | Klient | Link do briefu | Link do materiału | Link do LP | Zabieg
 const REQUIRED_HEADER_LABELS = {
   zabieg: "Zabieg",
-  klient: "Klient",
   briefLink: "Link do briefu",
   strona: "Link do LP",
   czyj: "Czyj? (PM)",
 };
 
-// Optional so an older/hand-edited copy of the sheet missing these columns
-// doesn't break the rest of the bot - same tolerance as scriptSheet.js's
-// "Data" column.
+// Optional so a copy of the sheet missing these columns (or using a
+// slightly different header label than expected) doesn't break the rest of
+// the bot - same tolerance as scriptSheet.js's "Data" column. "Klient" lives
+// here rather than in REQUIRED_HEADER_LABELS on purpose: the client name
+// isn't known until AFTER generateLPCopy() runs (it comes from
+// copy.business.name), so !lp never needs to read it up front - only write
+// it once the page is done, and only if the column happens to exist.
 const OPTIONAL_HEADER_LABELS = {
+  klient: "Klient",
   materialy: "Link do materiału",
   data: "Data",
 };
@@ -130,7 +134,7 @@ export async function findReferenceLPForZabieg(spreadsheetId, zabieg) {
   if (!match) return null;
 
   return {
-    klient: match[columnMap.klient] || "",
+    klient: columnMap.klient !== undefined ? match[columnMap.klient] || "" : "",
     briefLink: match[columnMap.briefLink] || "",
   };
 }
@@ -161,16 +165,22 @@ export async function upsertLPRow(spreadsheetId, { klient, zabieg, briefLink, ma
   const existingIndex = rows.findIndex((row) => {
     const rowBrief = row[columnMap.briefLink];
     if (briefLink && rowBrief && normalize(rowBrief) === normalize(briefLink)) return true;
-    return (
-      normalize(row[columnMap.klient]) === normalize(klient) &&
-      normalize(row[columnMap.zabieg]) === normalize(zabieg)
-    );
+    // Fall back to (Klient + Zabieg) only if the sheet actually has a Klient
+    // column - otherwise Zabieg alone is the best available match key.
+    if (columnMap.klient !== undefined) {
+      return (
+        normalize(row[columnMap.klient]) === normalize(klient) &&
+        normalize(row[columnMap.zabieg]) === normalize(zabieg)
+      );
+    }
+    return normalize(row[columnMap.zabieg]) === normalize(zabieg);
   });
 
   if (existingIndex !== -1) {
     const sheetRowNumber = startRow + existingIndex;
     const updates = [
       { col: "strona", value: strona },
+      { col: "klient", value: klient },
       { col: "data", value: todayDateStr() },
     ].filter(({ col }) => columnMap[col] !== undefined);
 
@@ -189,10 +199,10 @@ export async function upsertLPRow(spreadsheetId, { klient, zabieg, briefLink, ma
 
   const row = [];
   row[columnMap.zabieg] = zabieg || "";
-  row[columnMap.klient] = klient || "";
   row[columnMap.briefLink] = briefLink || "";
   row[columnMap.strona] = strona || "";
   row[columnMap.czyj] = czyj || "";
+  if (columnMap.klient !== undefined) row[columnMap.klient] = klient || "";
   if (columnMap.materialy !== undefined) row[columnMap.materialy] = materialy || "";
   if (columnMap.data !== undefined) row[columnMap.data] = todayDateStr();
   for (let i = 0; i < row.length; i++) {
