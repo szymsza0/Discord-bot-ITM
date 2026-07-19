@@ -300,7 +300,7 @@ function extractAndValidate(response) {
   return { toolUse, parsed };
 }
 
-function buildUserPrompt({ briefText, referenceLPText, filledMediaSlots }) {
+function buildUserPrompt({ briefText, referenceLPText, filledMediaSlots, additionalNotes }) {
   const parts = [];
   parts.push(`--- BRIEF TEJ LANDING PAGE ---\n${briefText}`);
 
@@ -308,6 +308,14 @@ function buildUserPrompt({ briefText, referenceLPText, filledMediaSlots }) {
     parts.push(
       "--- BRIEF REFERENCYJNEJ LP TEJ SAMEJ KATEGORII (inspiracja stylem i tonem, NIE kopiuj tresci ani konkretow klienta) ---\n" +
         referenceLPText
+    );
+  }
+
+  if (additionalNotes) {
+    parts.push(
+      "--- DODATKOWE UWAGI OPERATORA DO TEJ KONKRETNEJ STRONY (maja pierwszenstwo nad ogolnymi wytycznymi stylu " +
+        "ponizej, jesli sa ze soba sprzeczne - ale NIE ponad faktami z briefu: nadal nie zmyslaj cen/adresu/faktow) ---\n" +
+        additionalNotes
     );
   }
 
@@ -336,9 +344,15 @@ function buildUserPrompt({ briefText, referenceLPText, filledMediaSlots }) {
  * templateRulesText carries cache_control so the (large, static)
  * copywriting-guide prompt is billed at full price once per process.
  */
-export async function generateLPCopy({ templateRulesText, briefText, referenceLPText, filledMediaSlots = [] }) {
+export async function generateLPCopy({
+  templateRulesText,
+  briefText,
+  referenceLPText,
+  filledMediaSlots = [],
+  additionalNotes = null,
+}) {
   const messages = [
-    { role: "user", content: buildUserPrompt({ briefText, referenceLPText, filledMediaSlots }) },
+    { role: "user", content: buildUserPrompt({ briefText, referenceLPText, filledMediaSlots, additionalNotes }) },
   ];
 
   const baseParams = {

@@ -60,17 +60,23 @@ function extensionForMime(mimeType) {
  * next recognized key or the end of the message.
  */
 function parseInlineArgs(content) {
-  const result = { zabieg: null, brief: null, materialy: null };
+  const result = { zabieg: null, brief: null, materialy: null, uwagi: null };
   if (!content) return result;
 
-  const buffers = { zabieg: [], brief: [], materialy: [] };
+  const buffers = { zabieg: [], brief: [], materialy: [], uwagi: [] };
   let currentKey = null;
 
   for (const rawLine of content.split("\n")) {
-    const match = rawLine.match(/^\s*(zabiegi?|briefy?|materia?ly)\s*:\s*(.*)$/i);
+    const match = rawLine.match(/^\s*(zabiegi?|briefy?|materia?ly|uwag[ai]|notatki)\s*:\s*(.*)$/i);
     if (match) {
       const label = match[1].toLowerCase();
-      currentKey = label.startsWith("brief") ? "brief" : label.startsWith("zabieg") ? "zabieg" : "materialy";
+      currentKey = label.startsWith("brief")
+        ? "brief"
+        : label.startsWith("zabieg")
+        ? "zabieg"
+        : label.startsWith("uwag") || label.startsWith("notatk")
+        ? "uwagi"
+        : "materialy";
       if (match[2].trim()) buffers[currentKey].push(match[2].trim());
       continue;
     }
@@ -80,6 +86,7 @@ function parseInlineArgs(content) {
   result.zabieg = buffers.zabieg.length ? buffers.zabieg.join(", ") : null;
   result.brief = buffers.brief.length ? buffers.brief.join(", ") : null;
   result.materialy = buffers.materialy.length ? buffers.materialy.join("\n") : null;
+  result.uwagi = buffers.uwagi.length ? buffers.uwagi.join("\n") : null;
   return result;
 }
 
@@ -204,17 +211,22 @@ export async function processLpCommand(message) {
       if (materialyRaw === null) return;
     }
 
+    // Purely optional and inline-only - no interactive prompt, since forcing
+    // an "additional notes" question on every run would slow down the
+    // common case where there's nothing extra to say.
+    const dodatkoweUwagi = inline.uwagi || null;
+
+    const summaryFields = [
+      { name: "Zabieg", value: zabieg },
+      { name: "Brief", value: briefLink },
+      { name: "Materiały", value: truncate(materialyRaw || "brak", 1000) },
+    ];
+    if (dodatkoweUwagi) {
+      summaryFields.push({ name: "Dodatkowe uwagi", value: truncate(dodatkoweUwagi, 1000) });
+    }
+
     await message.channel.send({
-      embeds: [
-        new EmbedBuilder()
-          .setColor("#FFA500")
-          .setTitle("📝 Podsumowanie")
-          .addFields(
-            { name: "Zabieg", value: zabieg },
-            { name: "Brief", value: briefLink },
-            { name: "Materiały", value: truncate(materialyRaw || "brak", 1000) }
-          ),
-      ],
+      embeds: [new EmbedBuilder().setColor("#FFA500").setTitle("📝 Podsumowanie").addFields(summaryFields)],
     });
 
     const processingMsg = await message.channel.send({
@@ -302,6 +314,7 @@ export async function processLpCommand(message) {
         briefText,
         referenceLPText: referenceBriefText,
         filledMediaSlots,
+        additionalNotes: dodatkoweUwagi,
       });
     } catch (err) {
       if (err instanceof LPGenerationError) {
