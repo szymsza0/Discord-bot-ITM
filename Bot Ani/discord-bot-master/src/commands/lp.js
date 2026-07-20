@@ -267,16 +267,27 @@ export async function processLpCommand(message) {
 
     const templatePageId = WP_LP_TEMPLATE_PAGE_ID;
 
-    let briefText, template, reference;
+    // Brief + guidelines are critical - the whole command depends on them,
+    // so a failure here genuinely has to stop everything. The sheet
+    // reference lookup is purely a nice-to-have style hint (see
+    // findReferenceLPForZabieg's docstring) - zabieg/brief/materialy always
+    // come from the message itself, never from the sheet, so a sheet whose
+    // layout doesn't match what this code expects should never block the
+    // command. It gets its own try/catch, separate from the critical fetch,
+    // so one bad column lookup can't take down brief/guidelines fetching too.
+    let briefText, template;
     try {
-      [briefText, template, reference] = await Promise.all([
-        fetchDocPlainText(briefDocId),
-        getLPTemplate(),
-        findReferenceLPForZabieg(GOOGLE_LP_SHEET_ID, zabieg),
-      ]);
+      [briefText, template] = await Promise.all([fetchDocPlainText(briefDocId), getLPTemplate()]);
     } catch (err) {
       console.error("Error fetching LP starting data:", err);
       return processingMsg.edit({ embeds: [errorEmbed(`Nie udało się pobrać danych startowych: ${err.message}`)] });
+    }
+
+    let reference = null;
+    try {
+      reference = await findReferenceLPForZabieg(GOOGLE_LP_SHEET_ID, zabieg);
+    } catch (err) {
+      console.warn("Nie udało się pobrać referencyjnej LP z arkusza (pomijam):", err.message);
     }
 
     let referenceBriefText = null;
