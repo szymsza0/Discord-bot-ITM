@@ -7,6 +7,14 @@ const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 const GENERATION_MODEL = "claude-sonnet-5";
 const TOOL_NAME = "generate_lp_copy";
 
+// Prefix for marketing-copy fields Claude fills in without brief support -
+// visible directly on the draft page, so the operator sees exactly which
+// sentences are a guess and need review/replacement before publishing.
+// Never used for hard facts (prices, contact info, real testimonials,
+// stats) - those still come back null/empty if the brief doesn't provide
+// them, per the "never zmyślaj" rule.
+export const ASSUMPTION_MARKER = "⚠️ ZAŁOŻENIE: ";
+
 // Nullable AND optional: Claude may either omit a factual key entirely or
 // return null for it - both mean "brief didn't say, don't invent it" and
 // lpContentBuilder.js treats them identically (token stays unfilled).
@@ -159,7 +167,7 @@ const generateLPCopyTool = {
           properties: { eyebrow: nullableStringSchema, title: { type: "string" }, body: { type: "string" } },
           required: ["title", "body"],
         },
-        description: "Bloki technologii/metody.",
+        description: "Bloki technologii/metody (zwykle 2-3).",
       },
       synergy: {
         type: ["object", "null"],
@@ -218,7 +226,11 @@ const generateLPCopyTool = {
           type: "object",
           properties: {
             name: { type: "string" },
-            position: { ...nullableStringSchema, description: "Stanowisko/pozycja zawodowa autora opinii, jeśli podana w briefie (np. 'Dyrektor generalny firmy'). Null jeśli brak." },
+            position: {
+              ...nullableStringSchema,
+              description:
+                "Stanowisko/pozycja autora opinii. Jeśli brief podaje - przepisz 1:1. Jeśli nie - NIE zostawiaj null: wpisz ogólną, bezpieczną etykietę z prefiksem założenia (np. '⚠️ ZAŁOŻENIE: Klientka'), nigdy nie zmyślaj konkretnego stanowiska/firmy dla realnej osoby.",
+            },
             quote: { type: "string" },
           },
           required: ["name", "position", "quote"],
@@ -289,6 +301,23 @@ const generateLPCopyTool = {
   },
 };
 
+// Prompt compliance on "never use em/en dashes" isn't reliable enough on its
+// own (LLMs reach for — as a stylistic default) - this is a deterministic
+// backstop applied to every string in the result regardless of what the
+// model actually did, so the guideline is always enforced, not just usually.
+const DASH_RE = /[—–]/g;
+
+function stripDashes(value) {
+  if (typeof value === "string") return value.replace(DASH_RE, "-");
+  if (Array.isArray(value)) return value.map(stripDashes);
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const [key, v] of Object.entries(value)) out[key] = stripDashes(v);
+    return out;
+  }
+  return value;
+}
+
 function formatZodErrorForClaude(error) {
   return error.issues.map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`).join("; ");
 }
@@ -326,8 +355,21 @@ function buildUserPrompt({ briefText, referenceLPText, filledMediaSlots, additio
   );
 
   parts.push(
-    `Napisz copy tej landing page zgodnie z powyzszymi wytycznymi, wywolujac narzedzie ${TOOL_NAME}. Jesli brief nie dostarcza ` +
-      `wystarczajacych danych dla pola faktograficznego (cena, adres, lata doswiadczenia, liczba klientow, itp.), zwroc null zamiast zmyslac.`
+    "--- ZASADA WYPEŁNIANIA BRAKUJĄCYCH DANYCH ---\n" +
+      "Dwie różne kategorie pól, dwie różne zasady:\n\n" +
+      "1) NIGDY nie zmyślaj (zostaw null / pustą tablicę, jeśli brief tego nie podaje): business.name/address/phone/email, " +
+      "wszystkie ceny i czas w offer.* (price_regular, price_promo, duration_label, countdown_minutes, omnibus_price, savings_label), " +
+      "cały stats[] (konkretne liczby), cały pricing_table[] (realne ceny), oraz name/quote w testimonials[] (tożsamość i treść " +
+      "prawdziwej opinii klienta - nigdy nie wymyślaj całej opinii). To są konkretne, weryfikowalne fakty - zmyślenie ich jest " +
+      "ryzykowne prawnie/etycznie.\n\n" +
+      `2) DLA WSZYSTKICH INNYCH pól tekstowych (hero.eyebrow/body, problems, methods, synergy, usp, trust, steps ` +
+      "(title/body/bullets), gallery.title/subtitle, pricing_note, final_cta.eyebrow, footer.copyright, testimonials[].position) - " +
+      `jeśli brief nie daje wystarczających konkretów, NIE zostawiaj pustego pola ani krótszej niż typowo tablicy (np. problems ` +
+      `zwykle 3 pozycje, methods zwykle 2-3). Napisz sensowną, ogólną treść pasującą do tego typu zabiegu/branży, ale zacznij ją ` +
+      `od "${ASSUMPTION_MARKER}" żeby operator od razu widział na stronie, że to założenie do weryfikacji przed publikacją.\n\n` +
+      "3) NIGDY nie używaj długiego myślnika (—) ani półpauzy (–) w żadnym polu tekstowym - zamiast nich użyj przecinka, kropki, " +
+      "albo zwykłego łącznika (-).\n\n" +
+      `Napisz copy tej landing page zgodnie z powyzszymi wytycznymi, wywolujac narzedzie ${TOOL_NAME}.`
   );
 
   return parts.join("\n\n");
@@ -400,5 +442,5 @@ export async function generateLPCopy({
     );
   }
 
-  return parsed.data;
+  return stripDashes(parsed.data);
 }

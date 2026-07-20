@@ -63,11 +63,17 @@ function findColumnIndex(headerRow, keywords) {
 
 /**
  * Same tolerant-header-scan approach as scriptSheet.js's findHeaderRow: the
- * sheet may have blank leading rows, so scan for the row containing a cell
- * matching the "zabieg" keyword instead of assuming a fixed row index.
- * Always targets the "LP" tab by name (not the first tab in the workbook)
- * since this spreadsheet also holds the unrelated scripts sheet as another
- * tab.
+ * sheet may have blank leading rows, so scan for the header row instead of
+ * assuming a fixed row index. Always targets the "LP" tab by name (not the
+ * first tab in the workbook) since this spreadsheet also holds the unrelated
+ * scripts sheet as another tab.
+ *
+ * A row only qualifies as the header if it matches EVERY required keyword,
+ * not just "zabieg" - this sheet actually has a second, unrelated "Wzory"
+ * lookup table above the real log table, whose own mini-header is just the
+ * single cell "Zabieg" with nothing else. Matching on "zabieg" alone locked
+ * onto that row instead of the real header further down; requiring the full
+ * set is what actually distinguishes the two.
  */
 export async function findHeaderRow(spreadsheetId, sheetName = SHEET_NAME) {
   const sheets = getSheetsClient();
@@ -78,10 +84,16 @@ export async function findHeaderRow(spreadsheetId, sheetName = SHEET_NAME) {
   });
 
   const rows = res.data.values || [];
-  const headerRowIndex = rows.findIndex((row) => findColumnIndex(row, REQUIRED_HEADER_KEYWORDS.zabieg) !== -1);
+  const headerRowIndex = rows.findIndex((row) =>
+    Object.values(REQUIRED_HEADER_KEYWORDS).every((keywords) => findColumnIndex(row, keywords) !== -1)
+  );
 
   if (headerRowIndex === -1) {
-    throw new Error(`Nie znaleziono wiersza nagłówka (kolumna zawierająca "zabieg") w pierwszych 50 wierszach arkusza "${sheetName}".`);
+    throw new Error(
+      `Nie znaleziono wiersza nagłówka zawierającego wszystkie z: ${Object.values(REQUIRED_HEADER_KEYWORDS)
+        .map((kw) => kw.join("/"))
+        .join(", ")} w pierwszych 50 wierszach arkusza "${sheetName}".`
+    );
   }
 
   const headerRow = rows[headerRowIndex];
