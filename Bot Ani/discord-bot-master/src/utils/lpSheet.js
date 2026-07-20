@@ -5,26 +5,28 @@ import { getSheetsClient } from "./googleAuth.js";
 // must always target this tab by name explicitly.
 const SHEET_NAME = "LP";
 
-// Baza LP ("LP" tab) columns, as they actually exist:
-// Data | Czyj? (PM) | Klient | Link do briefu | Link do materiału | Link do LP | Zabieg
-const REQUIRED_HEADER_LABELS = {
-  zabieg: "Zabieg",
-  briefLink: "Link do briefu",
-  strona: "Link do LP",
-  czyj: "Czyj? (PM)",
+// Baza LP ("LP" tab) columns, matched by KEYWORD (substring, diacritic- and
+// case-insensitive) rather than exact label text - a hand-maintained sheet's
+// header wording drifts ("Link do briefu" vs "Brief" vs "Link brief...") and
+// an exact match breaks the whole command on the first tiny mismatch, so
+// each column only needs to CONTAIN one of these words.
+const REQUIRED_HEADER_KEYWORDS = {
+  zabieg: ["zabieg"],
+  briefLink: ["brief"],
+  strona: ["strona", "link do lp"],
+  czyj: ["czyj"],
 };
 
-// Optional so a copy of the sheet missing these columns (or using a
-// slightly different header label than expected) doesn't break the rest of
-// the bot - same tolerance as scriptSheet.js's "Data" column. "Klient" lives
-// here rather than in REQUIRED_HEADER_LABELS on purpose: the client name
-// isn't known until AFTER generateLPCopy() runs (it comes from
-// copy.business.name), so !lp never needs to read it up front - only write
-// it once the page is done, and only if the column happens to exist.
-const OPTIONAL_HEADER_LABELS = {
-  klient: "Klient",
-  materialy: "Link do materiału",
-  data: "Data",
+// Optional so a copy of the sheet missing these columns doesn't break the
+// rest of the bot - same tolerance as scriptSheet.js's "Data" column.
+// "Klient" lives here rather than in REQUIRED_HEADER_KEYWORDS on purpose:
+// the client name isn't known until AFTER generateLPCopy() runs (it comes
+// from copy.business.name), so !lp never needs to read it up front - only
+// write it once the page is done, and only if the column happens to exist.
+const OPTIONAL_HEADER_KEYWORDS = {
+  klient: ["klient"],
+  materialy: ["material"],
+  data: ["data"],
 };
 
 function columnIndexToLetter(index) {
@@ -38,16 +40,34 @@ function columnIndexToLetter(index) {
   return letter;
 }
 
+// Strips Polish diacritics too (ł isn't touched by NFD normalize, so it's
+// handled separately) - a header/value comparison that ignores "ł" vs "l"
+// or accents is more forgiving of hand-typed sheet content than a byte-exact
+// match, at essentially no risk of false positives for column-sized text.
 function normalize(value) {
-  return (value || "").toString().trim().toLowerCase();
+  return (value || "")
+    .toString()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/ł/gi, "l")
+    .trim()
+    .toLowerCase();
+}
+
+function findColumnIndex(headerRow, keywords) {
+  return headerRow.findIndex((cell) => {
+    const normalized = normalize(cell);
+    return keywords.some((k) => normalized.includes(k));
+  });
 }
 
 /**
  * Same tolerant-header-scan approach as scriptSheet.js's findHeaderRow: the
- * sheet may have blank leading rows, so scan for the row containing "Zabieg"
- * instead of assuming a fixed row index. Always targets the "LP" tab by
- * name (not the first tab in the workbook) since this spreadsheet also
- * holds the unrelated scripts sheet as another tab.
+ * sheet may have blank leading rows, so scan for the row containing a cell
+ * matching the "zabieg" keyword instead of assuming a fixed row index.
+ * Always targets the "LP" tab by name (not the first tab in the workbook)
+ * since this spreadsheet also holds the unrelated scripts sheet as another
+ * tab.
  */
 export async function findHeaderRow(spreadsheetId, sheetName = SHEET_NAME) {
   const sheets = getSheetsClient();
@@ -58,25 +78,25 @@ export async function findHeaderRow(spreadsheetId, sheetName = SHEET_NAME) {
   });
 
   const rows = res.data.values || [];
-  const headerRowIndex = rows.findIndex((row) =>
-    row.some((cell) => normalize(cell) === normalize(REQUIRED_HEADER_LABELS.zabieg))
-  );
+  const headerRowIndex = rows.findIndex((row) => findColumnIndex(row, REQUIRED_HEADER_KEYWORDS.zabieg) !== -1);
 
   if (headerRowIndex === -1) {
-    throw new Error(`Nie znaleziono wiersza nagłówka (kolumna "Zabieg") w pierwszych 50 wierszach arkusza "${sheetName}".`);
+    throw new Error(`Nie znaleziono wiersza nagłówka (kolumna zawierająca "zabieg") w pierwszych 50 wierszach arkusza "${sheetName}".`);
   }
 
   const headerRow = rows[headerRowIndex];
   const columnMap = {};
-  for (const [key, label] of Object.entries(REQUIRED_HEADER_LABELS)) {
-    const colIndex = headerRow.findIndex((cell) => normalize(cell) === normalize(label));
+  for (const [key, keywords] of Object.entries(REQUIRED_HEADER_KEYWORDS)) {
+    const colIndex = findColumnIndex(headerRow, keywords);
     if (colIndex === -1) {
-      throw new Error(`Nie znaleziono kolumny "${label}" w nagłówku arkusza "${sheetName}".`);
+      throw new Error(
+        `Nie znaleziono kolumny dla "${key}" (szukano nagłówka zawierającego: ${keywords.join(" / ")}) w arkuszu "${sheetName}". Nagłówki w arkuszu: ${headerRow.join(" | ")}`
+      );
     }
     columnMap[key] = colIndex;
   }
-  for (const [key, label] of Object.entries(OPTIONAL_HEADER_LABELS)) {
-    const colIndex = headerRow.findIndex((cell) => normalize(cell) === normalize(label));
+  for (const [key, keywords] of Object.entries(OPTIONAL_HEADER_KEYWORDS)) {
+    const colIndex = findColumnIndex(headerRow, keywords);
     if (colIndex !== -1) columnMap[key] = colIndex;
   }
 
