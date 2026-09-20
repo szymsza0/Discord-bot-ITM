@@ -25,8 +25,9 @@
   var PAGE_SLUG = "__PAGE_SLUG__";
   var DEDUP_MS = 8000;
 
-  if (window.__itmCf7Webhook) return;
-  window.__itmCf7Webhook = true;
+  var GUARD_KEY = "__itmCf7Webhook_" + WEBHOOK_URL.split("/").pop();
+  if (window[GUARD_KEY]) return;
+  window[GUARD_KEY] = true;
 
   var snapshots = {};
   var lastSend = { sig: "", at: 0 };
