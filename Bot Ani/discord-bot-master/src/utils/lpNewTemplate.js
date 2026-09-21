@@ -48,9 +48,16 @@ const REGION_NAMES = [
   "why",
   "howParas",
   "howSteps",
+  "packages",
   "faq",
   "contact",
 ];
+
+// Sekcje, które (w przeciwieństwie do reszty szablonu) mają w ogóle zniknąć
+// ze strony, gdy odpowiadający im region jest pusty - np. "pakiety" ma sens
+// tylko dla części klientów. W pliku szablonu owijają CAŁĄ sekcję (łącznie
+// z <section>...</section>) komentarzami <!--SECTION_IF:nazwa--> ... <!--/SECTION_IF:nazwa-->.
+const OPTIONAL_SECTIONS = ["packages"];
 
 function fillRow(rowTemplate, item) {
   let out = rowTemplate;
@@ -93,6 +100,15 @@ export function renderNewTemplate(
       if (!/^#[0-9a-fA-F]{6}$/.test(hex || "")) continue;
       content = content.replace(new RegExp(`(${cssVar}\\s*:\\s*)#[0-9a-fA-F]{3,8}`, "g"), `$1${hex}`);
     }
+  }
+
+  // 0.6) sekcje w całości opcjonalne - usuń CAŁY blok <!--SECTION_IF:nazwa-->...<!--/SECTION_IF:nazwa-->
+  // (włącznie z otaczającym <section>), gdy odpowiadający region nie ma żadnych wierszy.
+  // Musi zajść PRZED zwykłym rozwinięciem regionów, żeby usunięty blok nie trafił do emptyRegions.
+  for (const name of OPTIONAL_SECTIONS) {
+    const hasRows = (repeats[name] || []).length > 0;
+    const re = new RegExp(`<!--SECTION_IF:${name}-->([\\s\\S]*?)<!--\\/SECTION_IF:${name}-->`, "g");
+    content = content.replace(re, (_match, inner) => (hasRows ? inner : ""));
   }
 
   // 1) regiony powtarzalne
@@ -183,6 +199,10 @@ export function mapNewCopyToTemplate(copy, opinieImageUrls = []) {
     META_TITLE: s(c.metamorfozy?.title) || "Zobacz metamorfozy krok po kroku",
     META_SUB: s(c.metamorfozy?.subtitle) || "Kolejne efekty naszych klientek - przesuń, aby zobaczyć więcej.",
 
+    PACKAGES_TITLE: s(c.packages?.title) || "Pakiety zabiegów",
+    PACKAGES_SUB: s(c.packages?.subtitle),
+    PACKAGES_NOTE: s(c.packages?.note),
+
     MIDCTA_TITLE: s(c.midcta?.title),
     MIDCTA_BODY: s(c.midcta?.body),
     MIDCTA_CTA: s(c.midcta?.cta_label),
@@ -222,6 +242,17 @@ export function mapNewCopyToTemplate(copy, opinieImageUrls = []) {
     why: (c.why_us?.cards || []).map((card) => ({ WHY_CARD_TITLE: s(card.title), WHY_CARD_BODY: s(card.body) })),
     howParas: (c.how?.lead_paras || []).map((p) => ({ HOW_PARA: s(p) })),
     howSteps: (c.how?.steps || []).map((st, i) => ({ STEP_N: String(i + 1), STEP_TITLE: s(st.title), STEP_BODY: s(st.body) })),
+    packages: (c.packages?.items || []).map((p) => ({
+      PKG_FEATURED: p.featured ? "1" : "",
+      PKG_TAG: s(p.tag),
+      PKG_NAME: s(p.name),
+      PKG_COUNT: s(p.count),
+      PKG_PRICE_REGULAR: s(p.price_regular),
+      PKG_PRICE_TOTAL: s(p.price_total),
+      PKG_PRICE_PER: s(p.price_per),
+      PKG_SAVING: s(p.saving),
+      PKG_CTA: s(p.cta_label) || s(c.packages?.cta_label) || "Wybieram ten pakiet",
+    })),
     faq: (c.faq?.items || []).map((f) => ({ FAQ_Q: s(f.q), FAQ_A: s(f.a) })),
     contact: (c.final?.contact_lines || []).map((l) => ({ CONTACT_LINE: s(l) })),
   };

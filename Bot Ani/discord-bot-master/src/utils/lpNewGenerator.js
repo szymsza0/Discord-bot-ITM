@@ -83,6 +83,31 @@ const NewLpCopySchema = z.object({
     steps: z.array(z.object({ title: z.string().min(1), body: z.string().min(1) })).optional().default([]),
   }),
   metamorfozy: z.object({ title: nullableString, subtitle: nullableString }).optional().default({}),
+  packages: z
+    .object({
+      title: z.string().min(1),
+      subtitle: nullableString,
+      note: nullableString,
+      cta_label: nullableString,
+      items: z
+        .array(
+          z.object({
+            name: z.string().min(1),
+            count: z.string().min(1),
+            price_regular: nullableString,
+            price_total: z.string().min(1),
+            price_per: nullableString,
+            saving: nullableString,
+            tag: nullableString,
+            featured: z.boolean().optional().default(false),
+            cta_label: nullableString,
+          })
+        )
+        .optional()
+        .default([]),
+    })
+    .optional()
+    .default({ title: "Pakiety zabiegów", subtitle: null, note: null, cta_label: null, items: [] }),
   midcta: z.object({ title: z.string().min(1), body: nullableString, cta_label: z.string().min(1) }),
   faq: z.object({
     title: nullableString,
@@ -268,6 +293,37 @@ const generateNewLpCopyTool = {
         type: "object",
         properties: { title: ns, subtitle: ns },
       },
+      packages: {
+        type: "object",
+        description:
+          "Opcjonalna sekcja z pakietami/seriami zabiegów (kilka wizyt w niższej cenie za sztukę). Wypełnij items TYLKO jeśli brief albo uwagi operatora faktycznie opisują pakiety - ceny 1:1 z tych źródeł, nigdy nie zmyślaj i nie licz samodzielnie liczb, których tam nie ma. Jeśli klient nie oferuje pakietów, zwróć items jako pustą tablicę - cała sekcja wtedy w ogóle nie trafi na stronę.",
+        properties: {
+          title: { type: "string" },
+          subtitle: ns,
+          note: { ...ns, description: "Krótka pigułka nad kartami, np. 'Im większy pakiet, tym niższa cena zabiegu'." },
+          cta_label: ns,
+          items: {
+            type: "array",
+            description: "Karty pakietów (zwykle 3, np. 3/4/5 zabiegów). Wszystkie ceny wyłącznie z briefu/uwag operatora.",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "np. 'Pakiet 3 zabiegów'." },
+                count: { type: "string", description: "np. '3x'." },
+                price_regular: { ...ns, description: "Suma cen regularnych za pojedyncze zabiegi w pakiecie, tylko jeśli podana wprost." },
+                price_total: { type: "string", description: "Cena całego pakietu, 1:1 ze źródła." },
+                price_per: { ...ns, description: "Cena za pojedynczy zabieg w pakiecie - policz tylko jeśli obie liczby (suma i cena pakietu) są podane wprost." },
+                saving: { ...ns, description: "Ile klientka oszczędza względem ceny regularnej - policz tylko jeśli policzalne z podanych liczb." },
+                tag: { ...ns, description: "Etykieta na wyróżnionej karcie, np. 'Najczęściej wybierany'. Null dla pozostałych kart." },
+                featured: { type: "boolean", description: "true dla jednej, zwykle środkowej/najpopularniejszej karty." },
+                cta_label: ns,
+              },
+              required: ["name", "count", "price_total"],
+            },
+          },
+        },
+        required: ["title", "items"],
+      },
       midcta: {
         type: "object",
         properties: { title: { type: "string" }, body: ns, cta_label: { type: "string" } },
@@ -339,7 +395,7 @@ function extractAndValidate(response) {
   return { toolUse, parsed };
 }
 
-function buildUserPrompt({ briefText, formName, beforeAfterCount, opinieCount, additionalNotes }) {
+function buildUserPrompt({ briefText, formName, beforeAfterCount, opinieCount, additionalNotes, packagesInfo }) {
   const parts = [];
   parts.push(`--- BRIEF TEJ LANDING PAGE ---\n${briefText}`);
 
@@ -349,6 +405,17 @@ function buildUserPrompt({ briefText, formName, beforeAfterCount, opinieCount, a
         additionalNotes
     );
   }
+
+  parts.push(
+    packagesInfo
+      ? "--- PAKIETY / SERIE ZABIEGÓW (podane przez operatora, mają pierwszeństwo nad opisem pakietów w briefie jeśli się różnią) ---\n" +
+          packagesInfo +
+          "\nWypełnij packages.items na tej podstawie. Jeśli brief RÓWNIEŻ opisuje pakiety, potraktuj to jako uzupełnienie - " +
+          "nigdy nie zmyślaj ani nie licz liczb, których nie podano wprost w żadnym z tych dwóch źródeł."
+      : "--- PAKIETY / SERIE ZABIEGÓW ---\nOperator nie podał osobno informacji o pakietach. Jeśli BRIEF opisuje pakiety/serie " +
+          "zabiegów (np. 'pakiet 3 zabiegów za X zł'), wypełnij packages.items na tej podstawie, 1:1 z liczbami z briefu. " +
+          "Jeśli ani brief, ani operator nic o pakietach nie mówią, zwróć packages.items jako pustą tablicę - sekcja wtedy w ogóle nie trafi na stronę."
+  );
 
   parts.push(
     "--- KONTEKST MEDIÓW I FORMULARZA (dostarczone osobno przez operatora) ---\n" +
@@ -391,6 +458,7 @@ function buildUserPrompt({ briefText, formName, beforeAfterCount, opinieCount, a
  * @param {number} args.beforeAfterCount
  * @param {number} args.opinieCount
  * @param {string|null} args.additionalNotes
+ * @param {string|null} args.packagesInfo   info o pakietach/seriach zabiegów podane osobno przez operatora
  */
 export async function generateNewLpCopy({
   templateRulesText,
@@ -399,11 +467,12 @@ export async function generateNewLpCopy({
   beforeAfterCount = 0,
   opinieCount = 0,
   additionalNotes = null,
+  packagesInfo = null,
 }) {
   const messages = [
     {
       role: "user",
-      content: buildUserPrompt({ briefText, formName, beforeAfterCount, opinieCount, additionalNotes }),
+      content: buildUserPrompt({ briefText, formName, beforeAfterCount, opinieCount, additionalNotes, packagesInfo }),
     },
   ];
 

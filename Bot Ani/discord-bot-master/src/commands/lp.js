@@ -8,6 +8,7 @@ import {
   parseMaterialyInput,
   downloadFileuploaderBuffer,
   parseFileuploaderLink,
+  fileuploaderDirect,
   listShareFolderFiles,
   downloadShareFolderFile,
 } from "../utils/fileuploaderMedia.js";
@@ -339,9 +340,16 @@ async function resolveMediaUrl(url, seoBase) {
       return up.sourceUrl;
     }
   } catch (err) {
-    // Ostatnia deska ratunku dla zwyklego URL-a: uzyj go wprost w <img src>,
-    // niech przeglądarka klienta go pobierze. Fileuploader /view/ tak nie dziala.
-    if (parsed.type !== "view" && /^https?:\/\//i.test(url)) {
+    // Ostatnia deska ratunku: jeśli nie udało się pobrać/wgrać pliku do WP
+    // (limit uprawnień, format, timeout...), nie zostawiaj pustego <img src> -
+    // dla fileuploadera /view/ jest bezposredni URL pliku (/api/view/{hash}/file,
+    // patrz fileuploaderDirect) ktory dziala jako <img src> mimo ze sam upload
+    // do WP sie nie udal; dla zwyklego http(s) URL-a uzyj go wprost.
+    if (parsed.type === "view") {
+      console.warn(`resolveMediaUrl: nie wgrano ${url} (${err.message}), używam bezpośredniego URL fileuploadera`);
+      return fileuploaderDirect(url);
+    }
+    if (/^https?:\/\//i.test(url)) {
       console.warn(`resolveMediaUrl: nie wgrano ${url} (${err.message}), używam URL wprost`);
       return url;
     }
@@ -400,6 +408,15 @@ async function runNewLpFlow(message, { inline }) {
   const uwagiFromPrompt = uwagiRaw && !/^\s*brak\s*$/i.test(uwagiRaw) ? uwagiRaw.trim() : null;
   const dodatkoweUwagi = [inline.uwagi, uwagiFromPrompt].filter(Boolean).join("\n") || null;
 
+  const pakietyRaw = await askText(
+    message,
+    "📦 Pakiety zabiegów (jeśli klient je oferuje) - liczba zabiegów i cena za każdy pakiet, np. " +
+      "`3 zabiegi - 550 zł, 4 zabiegi - 700 zł (polecany), 5 zabiegów - 800 zł`. " +
+      "Jeśli brief już to opisuje albo klient nie oferuje pakietów, napisz `brak` albo pomiń:",
+    { optional: true }
+  );
+  const pakietyInfo = pakietyRaw && !/^\s*brak\s*$/i.test(pakietyRaw) ? pakietyRaw.trim() : null;
+
   const heroUrls = splitLinks(heroRaw);
   const baUrls = splitLinks(baRaw);
   const opUrls = splitLinks(opRaw);
@@ -416,7 +433,8 @@ async function runNewLpFlow(message, { inline }) {
           { name: "Media", value: fv(`HERO: ${heroUrls.length} · przed/po: ${baUrls.length} · opinie: ${opUrls.length}`) },
           { name: "Formularz", value: fv(truncate(formShortcode, 500)) },
           { name: "Motyw", value: fv(themeText || "domyślny"), inline: true },
-          { name: "Uwagi", value: fv(dodatkoweUwagi || "brak"), inline: true }
+          { name: "Uwagi", value: fv(dodatkoweUwagi || "brak"), inline: true },
+          { name: "Pakiety", value: fv(pakietyInfo || "brak / z briefu"), inline: true }
         ),
     ],
   });
@@ -443,6 +461,7 @@ async function runNewLpFlow(message, { inline }) {
       beforeAfterCount: baUrls.length,
       opinieCount: opUrls.length,
       additionalNotes: dodatkoweUwagi,
+      packagesInfo: pakietyInfo,
     });
   } catch (err) {
     if (err instanceof NewLPGenerationError) {
@@ -596,6 +615,7 @@ async function runNewLpFlow(message, { inline }) {
   if (palette) done.push(`Motyw: paleta z „${truncate(themeText, 50)}"`);
   done.push(`Formularz: ${formShortcode}`);
   done.push(`Media: HERO ${heroImageUrl ? "1" : "0"}, przed/po ${baResolved.length}, opinie ${opResolved.length}`);
+  if (copy.packages?.items?.length) done.push(`Pakiety: ${copy.packages.items.length} kart(y)`);
   if (webhookLine && !webhookLine.startsWith("Webhook: NIE")) done.push(webhookLine);
 
   const pageUrl = page.link || page.editLink;
