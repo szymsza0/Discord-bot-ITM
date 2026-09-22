@@ -93,6 +93,19 @@ function expandRegion(content, name, rows) {
   return content.replace(re, (_match, inner) => (rows || []).map((item) => fillRow(inner, item)).join(""));
 }
 
+// [[if TOKEN]] ... [[/if]] wokol DOWOLNEGO fragmentu strony (nie tylko wiersza
+// regionu, jak w fillRow) - fragment zostaje TYLKO gdy skalarny token TOKEN
+// jest niepusty. Np. pasek oceny Google w hero (gated przez RATING_VALUE)
+// znika calkowicie, gdy operator nie poda oceny w briefie - zamiast pokazywac
+// pusty/polowiczny pasek. Musi zajsc PRZED podstawieniem {{TOKEN}} (krok 3),
+// zeby klucz w warunku wciaz byl widoczny do sprawdzenia w mapie tokens.
+function applyScalarConditionals(content, tokens) {
+  return content.replace(/\[\[if (\w+)\]\]([\s\S]*?)\[\[\/if\]\]/g, (_m, key, inner) => {
+    const v = tokens ? tokens[key] : undefined;
+    return v == null || v === "" ? "" : inner;
+  });
+}
+
 /**
  * @param {string} templateHtml  surowy szablon (getNewLpTemplate())
  * @param {object} args
@@ -141,6 +154,9 @@ export function renderNewTemplate(
   content = content.replaceAll("{{MEDIA:hero_image}}", heroImageUrl || "");
   content = content.replaceAll("{{FORM_SHORTCODE}}", formShortcode || "");
 
+  // 2.5) fragmenty warunkowe [[if TOKEN]]...[[/if]] oparte o skalarne tokeny
+  content = applyScalarConditionals(content, tokens);
+
   // 3) skalarne tokeny (null / "" -> token zostaje i trafia do raportu)
   for (const [token, value] of Object.entries(tokens)) {
     if (value === null || value === undefined || value === "") continue;
@@ -170,6 +186,11 @@ export function mapNewCopyToTemplate(copy, opinieImageUrls = []) {
     NAV_LOGO: s(c.nav?.logo),
     NAV_LOGO_SUB: s(c.nav?.logo_sub),
     NAV_CTA: s(c.nav?.cta_label),
+
+    // Pasek oceny Google nad hero - opcjonalny (patrz [[if RATING_VALUE]] w
+    // szablonie): znika calkowicie, gdy business.rating_value jest puste.
+    RATING_VALUE: s(c.business?.rating_value),
+    RATING_TEXT: s(c.business?.rating_text),
 
     HERO_BADGE: s(c.hero?.badge),
     HERO_HEADLINE: s(c.hero?.headline),

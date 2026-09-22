@@ -24,6 +24,8 @@ const NewLpCopySchema = z.object({
     phone: nullableString,
     email: nullableString,
     hours: nullableString,
+    rating_value: nullableString,
+    rating_text: nullableString,
   }),
   seo: z.object({ title: z.string().min(1), metaDescription: z.string().min(1) }),
   nav: z.object({
@@ -149,8 +151,21 @@ const generateNewLpCopyTool = {
     properties: {
       business: {
         type: "object",
-        properties: { name: ns, address: ns, phone: ns, email: ns, hours: ns },
-        required: ["name", "address", "phone", "email", "hours"],
+        properties: {
+          name: ns,
+          address: ns,
+          phone: ns,
+          email: ns,
+          hours: ns,
+          rating_value: { ...ns, description: "Ocena Google jako liczba, np. '4,9/5'. TYLKO jesli podana wprost w briefie." },
+          rating_text: {
+            ...ns,
+            description:
+              "Reszta paska oceny obok liczby, np. 'na podstawie 33 opinii Google - najbardziej rzetelny salon w Legnicy i okolicy'. " +
+              "TYLKO jesli brief podaje liczbe opinii / mocny fakt o firmie do podkreslenia - w innym wypadku null (caly pasek zniknie ze strony).",
+          },
+        },
+        required: ["name", "address", "phone", "email", "hours", "rating_value", "rating_text"],
       },
       seo: {
         type: "object",
@@ -438,6 +453,8 @@ function buildUserPrompt({ briefText, formName, beforeAfterCount, opinieCount, a
   parts.push(
     "--- ZASADA WYPEŁNIANIA BRAKUJĄCYCH DANYCH ---\n" +
       "1) NIGDY nie zmyślaj (null / pusta tablica, jeśli brief nie podaje): business.name/address/phone/email/hours, " +
+      "business.rating_value/rating_text (ocena Google i liczba opinii - jeśli brief nie podaje konkretnej oceny/liczby " +
+      "opinii, zostaw oba pola null i pasek oceny w ogóle nie trafi na stronę), " +
       "offer.price_regular/price_promo/countdown_minutes/savings_line, final.contact_lines, oraz quote/name w opinie.items " +
       "(tożsamość i treść realnej opinii).\n" +
       `2) DLA POZOSTAŁYCH pól tekstowych: jeśli brief nie daje konkretów, NIE zostawiaj pusto ani krótszych list niż wskazane ` +

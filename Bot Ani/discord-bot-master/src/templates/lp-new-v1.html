@@ -7,7 +7,10 @@
    - placeholdery skalarne w podwojnych klamrach (np. HERO_HEADLINE, OFFER_PRICE_PROMO),
    - placeholder MEDIA dwukropek hero_image = URL zdjecia HERO,
    - placeholder FORM_SHORTCODE = shortcode CF7 (ten sam w obu formularzach),
-   - regiony powtarzalne oznaczone komentarzami BEGIN:nazwa oraz END:nazwa.
+   - regiony powtarzalne oznaczone komentarzami BEGIN:nazwa oraz END:nazwa,
+   - [[if TOKEN]]...[[/if]] wokol dowolnego fragmentu - fragment zostaje TYLKO
+     gdy skalarny token TOKEN jest niepusty (np. pasek oceny Google w hero,
+     gated przez RATING_VALUE - znika calkowicie, gdy operator nie poda oceny).
   Ten wiodacy komentarz jest usuwany przy ladowaniu szablonu (getNewLpTemplate).
 
   FORMULARZ = SZKIELET. W CF7 trzymamy goly formularz bez wlasnych stylow i wrapperow.
@@ -80,6 +83,16 @@
   .zl-hero p.lead{font-size:19.5px;color:var(--zl-ink-soft)}
   .zl-hero__note{margin:18px 0 22px;background:#FBF5EE;border-left:4px solid var(--zl-mauve);padding:14px 18px;border-radius:10px;font-size:16px;color:var(--zl-ink-soft)}
   @media(max-width:900px){.zl-hero__media{order:-1;margin:0 auto}}
+  /* Pasek oceny (Google) nad hero. Znika calkowicie, gdy token RATING_VALUE
+     jest puste (mechanizm warunkowy w markupie ponizej, patrz lpNewTemplate.js)
+     - dopisujemy go, gdy operator poda realna ocene w briefie, nigdy nie
+     zmyslamy liczby opinii/gwiazdek. */
+  .zl-rating-top{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;width:max-content;max-width:100%;margin:0 auto 30px;padding:9px 18px;background:#fff;border:1px solid var(--zl-beige);border-radius:999px;box-shadow:var(--zl-shadow);color:var(--zl-ink);font-size:13px;font-weight:700;text-align:center;white-space:nowrap}
+  .zl-rating-top .stars{color:#C79A3A;letter-spacing:1px;font-size:14px}
+  .zl-rating-top b{color:var(--zl-mauve-deep)}
+  .zl-rating-top .sep{width:1px;height:16px;background:var(--zl-beige)}
+  .zl-rating-top .txt{color:var(--zl-ink-soft);font-weight:600}
+  @media(max-width:560px){.zl-rating-top{font-size:11.5px;gap:7px;padding:8px 12px;white-space:normal}.zl-rating-top .sep{height:14px}}
   .zl-img{width:100%;border-radius:24px;object-fit:cover;display:block;box-shadow:var(--zl-shadow);transition:transform .25s ease, box-shadow .25s ease}
   .zl-img:hover{transform:scale(1.015);box-shadow:var(--zl-shadow-hover)}
   .zl-ph--portrait{aspect-ratio:4/5;max-width:430px;margin:0 auto}
@@ -299,16 +312,19 @@
 
 <!-- ============================ HERO ============================ -->
 <header class="zl-hero" id="top">
-  <div class="zl-wrap zl-hero__grid">
-    <div>
-      <span class="zl-hero__badge"><b>&#10022;</b> {{HERO_BADGE}}</span>
-      <h1>{{HERO_HEADLINE}} <em>{{HERO_HEADLINE_EM}}</em></h1>
-      <p class="lead">{{HERO_LEAD}}</p>
-      <p class="zl-hero__note">{{HERO_NOTE}}</p>
-      <a href="#form-top" class="zl-btn">{{HERO_CTA}} &rarr;</a>
-    </div>
-    <div class="zl-hero__media">
-      <img src="{{MEDIA:hero_image}}" alt="{{HERO_HEADLINE}}" class="zl-img zl-ph--portrait" fetchpriority="high" decoding="async">
+  <div class="zl-wrap">
+    [[if RATING_VALUE]]<div class="zl-rating-top"><span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span> <b>{{RATING_VALUE}}</b> <span class="sep"></span> <span class="txt">{{RATING_TEXT}}</span></div>[[/if]]
+    <div class="zl-hero__grid">
+      <div>
+        <span class="zl-hero__badge"><b>&#10022;</b> {{HERO_BADGE}}</span>
+        <h1>{{HERO_HEADLINE}} <em>{{HERO_HEADLINE_EM}}</em></h1>
+        <p class="lead">{{HERO_LEAD}}</p>
+        <p class="zl-hero__note">{{HERO_NOTE}}</p>
+        <a href="#form-top" class="zl-btn">{{HERO_CTA}} &rarr;</a>
+      </div>
+      <div class="zl-hero__media">
+        <img src="{{MEDIA:hero_image}}" alt="{{HERO_HEADLINE}}" class="zl-img zl-ph--portrait" fetchpriority="high" decoding="async">
+      </div>
     </div>
   </div>
 </header>
