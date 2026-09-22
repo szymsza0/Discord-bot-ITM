@@ -410,7 +410,7 @@ function extractAndValidate(response) {
   return { toolUse, parsed };
 }
 
-function buildUserPrompt({ briefText, formName, beforeAfterCount, opinieCount, additionalNotes, packagesInfo }) {
+function buildUserPrompt({ briefText, formName, beforeAfterCount, opinieCount, additionalNotes, packagesInfo, ratingInfo }) {
   const parts = [];
   parts.push(`--- BRIEF TEJ LANDING PAGE ---\n${briefText}`);
 
@@ -430,6 +430,18 @@ function buildUserPrompt({ briefText, formName, beforeAfterCount, opinieCount, a
       : "--- PAKIETY / SERIE ZABIEGÓW ---\nOperator nie podał osobno informacji o pakietach. Jeśli BRIEF opisuje pakiety/serie " +
           "zabiegów (np. 'pakiet 3 zabiegów za X zł'), wypełnij packages.items na tej podstawie, 1:1 z liczbami z briefu. " +
           "Jeśli ani brief, ani operator nic o pakietach nie mówią, zwróć packages.items jako pustą tablicę - sekcja wtedy w ogóle nie trafi na stronę."
+  );
+
+  parts.push(
+    ratingInfo
+      ? "--- OCENA GOOGLE (podana przez operatora, ma pierwszeństwo nad briefem jeśli się różnią) ---\n" +
+          ratingInfo +
+          "\nWypełnij business.rating_value (sama liczba, np. '4,9/5') i business.rating_text (reszta zdania obok, np. " +
+          "'na podstawie 33 opinii Google - najbardziej rzetelny salon w okolicy') na tej podstawie. Nigdy nie zmyślaj ani nie " +
+          "zaokrąglaj liczb, których operator nie podał wprost."
+      : "--- OCENA GOOGLE ---\nOperator nie podał oceny Google. Jeśli BRIEF podaje konkretną, realną ocenę (np. '4,9/5 na 33 " +
+          "opinie'), wypełnij business.rating_value/rating_text na tej podstawie, 1:1 z liczbami z briefu. W przeciwnym razie " +
+          "zwróć oba pola jako null - pasek oceny wtedy w ogóle nie trafi na stronę."
   );
 
   parts.push(
@@ -476,6 +488,7 @@ function buildUserPrompt({ briefText, formName, beforeAfterCount, opinieCount, a
  * @param {number} args.opinieCount
  * @param {string|null} args.additionalNotes
  * @param {string|null} args.packagesInfo   info o pakietach/seriach zabiegów podane osobno przez operatora
+ * @param {string|null} args.ratingInfo     ocena Google (średnia + liczba opinii) podana osobno przez operatora
  */
 export async function generateNewLpCopy({
   templateRulesText,
@@ -485,11 +498,12 @@ export async function generateNewLpCopy({
   opinieCount = 0,
   additionalNotes = null,
   packagesInfo = null,
+  ratingInfo = null,
 }) {
   const messages = [
     {
       role: "user",
-      content: buildUserPrompt({ briefText, formName, beforeAfterCount, opinieCount, additionalNotes, packagesInfo }),
+      content: buildUserPrompt({ briefText, formName, beforeAfterCount, opinieCount, additionalNotes, packagesInfo, ratingInfo }),
     },
   ];
 

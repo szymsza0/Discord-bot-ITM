@@ -417,6 +417,15 @@ async function runNewLpFlow(message, { inline }) {
   );
   const pakietyInfo = pakietyRaw && !/^\s*brak\s*$/i.test(pakietyRaw) ? pakietyRaw.trim() : null;
 
+  const ratingRaw = await askText(
+    message,
+    "⭐ Ocena Google (żeby pokazać pasek z oceną nad hero) - podaj realną średnią i liczbę opinii, np. " +
+      "`4,9/5 na podstawie 33 opinii`. Jeśli nie chcesz pokazywać oceny albo jej nie znasz, napisz `brak` albo pomiń - " +
+      "pasek wtedy w ogóle nie trafi na stronę:",
+    { optional: true }
+  );
+  const ratingInfo = ratingRaw && !/^\s*brak\s*$/i.test(ratingRaw) ? ratingRaw.trim() : null;
+
   const heroUrls = splitLinks(heroRaw);
   const baUrls = splitLinks(baRaw);
   const opUrls = splitLinks(opRaw);
@@ -434,7 +443,8 @@ async function runNewLpFlow(message, { inline }) {
           { name: "Formularz", value: fv(truncate(formShortcode, 500)) },
           { name: "Motyw", value: fv(themeText || "domyślny"), inline: true },
           { name: "Uwagi", value: fv(dodatkoweUwagi || "brak"), inline: true },
-          { name: "Pakiety", value: fv(pakietyInfo || "brak / z briefu"), inline: true }
+          { name: "Pakiety", value: fv(pakietyInfo || "brak / z briefu"), inline: true },
+          { name: "Ocena Google", value: fv(ratingInfo || "brak / z briefu"), inline: true }
         ),
     ],
   });
@@ -462,6 +472,7 @@ async function runNewLpFlow(message, { inline }) {
       opinieCount: opUrls.length,
       additionalNotes: dodatkoweUwagi,
       packagesInfo: pakietyInfo,
+      ratingInfo,
     });
   } catch (err) {
     if (err instanceof NewLPGenerationError) {
