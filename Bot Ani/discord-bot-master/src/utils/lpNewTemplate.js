@@ -33,7 +33,20 @@ export async function getNewLpTemplate({ forceRefresh = false } = {}) {
 
 /** Zawija gotowy HTML w jeden blok Gutenberga "Custom HTML". */
 export function wrapWpHtmlBlock(html) {
-  return `<!-- wp:html -->\n${html}\n<!-- /wp:html -->`;
+  return `<!-- wp:html -->\n${stripBlankLines(html)}\n<!-- /wp:html -->`;
+}
+
+// WP (wpautop, ewentualnie filtry motywu takie jak Kadence) potrafi zamienić
+// PUSTĄ linię (\n\s*\n) na </p><p> nawet w treści, która trafia jako "surowy"
+// content strony - wewnątrz <style> to fizycznie wycina regułę CSS idącą zaraz
+// po pustej linii (np. po komentarzu /* SEKCJA */), a nie tylko przegrywa w
+// kaskadzie. Usunięcie pustych linii jest bezpieczne jednocześnie dla
+// CSS/HTML/JS - nic w tym szablonie nie zależy od pustej linii jako takiej.
+function stripBlankLines(html) {
+  return html
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .join("\n");
 }
 
 // Wszystkie regiony powtarzalne obecne w lp-new-v1.html. "beforeAfter"
@@ -57,7 +70,10 @@ const REGION_NAMES = [
 // ze strony, gdy odpowiadający im region jest pusty - np. "pakiety" ma sens
 // tylko dla części klientów. W pliku szablonu owijają CAŁĄ sekcję (łącznie
 // z <section>...</section>) komentarzami <!--SECTION_IF:nazwa--> ... <!--/SECTION_IF:nazwa-->.
-const OPTIONAL_SECTIONS = ["packages"];
+// "beforeAfter" owija DWIE sekcje (efekty + metamorfozy) tym samym markerem -
+// obie znikają razem, gdy nie ma ani jednego zdjęcia przed/po (pusta karuzela
+// bez slajdów wygląda na zepsutą stronę, nie na "brak treści").
+const OPTIONAL_SECTIONS = ["packages", "beforeAfter", "opinie"];
 
 function fillRow(rowTemplate, item) {
   let out = rowTemplate;
@@ -202,6 +218,16 @@ export function mapNewCopyToTemplate(copy, opinieImageUrls = []) {
     PACKAGES_TITLE: s(c.packages?.title) || "Pakiety zabiegów",
     PACKAGES_SUB: s(c.packages?.subtitle),
     PACKAGES_NOTE: s(c.packages?.note),
+    // Siatka jest CSS-owana pod 3 kolumny; przy 1-2 kartach dociskamy do
+    // wyśrodkowanej, węższej siatki zamiast kart wciśniętych w 1/3 rzędu
+    // (patrz .zl-packages__grid--1/--2 w <style>, aktywne tylko od 901px -
+    // na mobile i tak zawsze jest 1 kolumna).
+    PACKAGES_GRID_CLASS:
+      (c.packages?.items || []).length === 1
+        ? "zl-packages__grid--1"
+        : (c.packages?.items || []).length === 2
+        ? "zl-packages__grid--2"
+        : "zl-packages__grid--default",
 
     MIDCTA_TITLE: s(c.midcta?.title),
     MIDCTA_BODY: s(c.midcta?.body),
@@ -228,14 +254,19 @@ export function mapNewCopyToTemplate(copy, opinieImageUrls = []) {
   const repeats = {
     trust: (c.trust || []).map((t) => ({ T_STRONG: s(t.strong), T_LABEL: s(t.label) })),
     fit: (c.fit?.items || []).map((x) => ({ FIT_ITEM: s(x) })),
-    // Renderujemy tyle kart, ile jest ZDJĘĆ opinii (to realne screeny). Cytat
-    // i imię dokładamy tylko gdy AI je zwróciło (real, nie zmyślone) - inaczej
-    // karta to samo zdjęcie.
+    // Renderujemy tyle kart, ile jest ZDJĘĆ opinii (to realne screeny). Gdy
+    // dla danej pozycji jest zdjęcie, pokazujemy WYŁĄCZNIE zdjęcie - realny
+    // screen z Google już ma na sobie gwiazdki/imię/treść, więc dopisywanie
+    // cytatu/imienia obok jest zbędne i ryzykowne (mogłoby nie zgadzać się z
+    // tym, co faktycznie widać na screenie). Tekst pokazujemy tylko wtedy,
+    // gdy dla danej pozycji NIE MA zdjęcia (opinia podana jako sam cytat).
     opinie: Array.from(
       { length: Math.max((c.opinie?.items || []).length, opinieImageUrls.length) },
       (_unused, i) => {
+        const image = s(opinieImageUrls[i] || "");
+        if (image) return { OP_IMAGE: image, OP_QUOTE: "", OP_NAME: "" };
         const it = (c.opinie?.items || [])[i] || {};
-        return { OP_QUOTE: s(it.quote), OP_NAME: s(it.name), OP_IMAGE: s(opinieImageUrls[i] || "") };
+        return { OP_IMAGE: "", OP_QUOTE: s(it.quote), OP_NAME: s(it.name) };
       }
     ),
     offerIncludes: (c.offer?.includes || []).map((x) => ({ OFFER_INCLUDE: s(x) })),

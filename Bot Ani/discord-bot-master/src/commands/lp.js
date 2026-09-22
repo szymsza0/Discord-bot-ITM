@@ -485,12 +485,19 @@ async function runNewLpFlow(message, { inline }) {
   const businessSlug = localSlug(copy.business?.name || zabieg || "itm") || "itm";
   const mediaFailures = [];
 
+  // Brak dedykowanego HERO nie powinien dawać pustego <img src> na stronie -
+  // jeśli operator podał chociaż zdjęcia przed/po, pierwsze z nich jest dużo
+  // lepszym hero niż nic (sekcja i tak trafia na czoło strony).
   let heroImageUrl = "";
-  if (!heroUrls[0]) {
-    mediaFailures.push("HERO: nie podano prawidłowego linku");
+  const heroSourceUrl = heroUrls[0] || baUrls[0] || null;
+  if (!heroSourceUrl) {
+    mediaFailures.push("HERO: nie podano prawidłowego linku (ani HERO, ani żadnego zdjęcia przed/po do zastępczego użycia)");
   } else {
     try {
-      heroImageUrl = await resolveMediaUrl(heroUrls[0], `${businessSlug}-hero`);
+      heroImageUrl = await resolveMediaUrl(heroSourceUrl, `${businessSlug}-hero`);
+      if (!heroUrls[0]) {
+        mediaFailures.push("HERO: nie podano dedykowanego zdjęcia - użyto pierwszego zdjęcia przed/po jako zastępczego, sprawdź czy pasuje");
+      }
     } catch (err) {
       console.error("new-LP hero media:", err);
       mediaFailures.push(`HERO: ${err.message}`);
