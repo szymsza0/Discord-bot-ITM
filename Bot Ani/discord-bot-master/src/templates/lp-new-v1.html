@@ -152,7 +152,11 @@
   .zl-price .promo{display:block;margin-top:12px;color:#2E7D5B;font-weight:700;font-size:15px}
 
   /* PAKIETY (opcjonalne - sekcja znika całkowicie, gdy klient ich nie oferuje) */
-  .zl-packages{background:var(--zl-mauve-dark);color:#fff}
+  /* padding-bottom na sztywno (niezaleznie od domyslnych 76px z ".zl-page section"):
+     wysokosc kart pakietow rozni sie w zaleznosci od tego, ile opcjonalnych
+     elementow ma dana karta (tag/saving/per), wiec sekcja bez wlasnego zapasu
+     na dole potrafi konczyc sie dosłownie na krawedzi ostatniego kafelka. */
+  .zl-packages{background:var(--zl-mauve-dark);color:#fff;padding-bottom:110px !important}
   .zl-packages .zl-sub{color:rgba(255,255,255,.78)}
   .zl-packages .zl-divider{background:rgba(255,255,255,.55)}
   .zl-packages__note{display:inline-block;margin-top:15px;padding:8px 16px;border:1px solid rgba(255,255,255,.22);border-radius:999px;color:rgba(255,255,255,.85);font-size:12.5px;font-weight:600;letter-spacing:.04em}
@@ -166,14 +170,14 @@
     .zl-packages__grid--1{grid-template-columns:1fr}
     .zl-packages__grid--2{grid-template-columns:repeat(2,1fr)}
   }
-  .zl-package{background:var(--zl-card);color:var(--zl-ink);border-radius:var(--zl-radius);padding:30px 25px;position:relative;box-shadow:var(--zl-shadow)}
+  .zl-package{background:var(--zl-card);color:var(--zl-ink);border-radius:var(--zl-radius);padding:30px 25px;position:relative;box-shadow:var(--zl-shadow);text-align:center}
   .zl-package--featured{border:3px solid var(--zl-mauve-deep)}
   @media(min-width:901px){.zl-package--featured{transform:translateY(-10px)}}
   .zl-package__tag{position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:var(--zl-mauve-deep);color:#fff;padding:7px 16px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
   .zl-package h3{font-size:19px}
   .zl-package__count{font-family:'Cormorant Garamond',serif;font-size:50px;line-height:1;font-weight:700;color:var(--zl-mauve-deep);margin:16px 0 4px}
   .zl-package__old{display:block;color:var(--zl-ink-soft);font-size:14px;text-decoration:line-through}
-  .zl-package__total{font-size:25px;font-weight:800;color:var(--zl-ink);margin-top:6px}
+  .zl-package__total{font-size:25px;font-weight:800;color:var(--zl-save);margin-top:6px}
   .zl-package__per{font-size:14px;color:var(--zl-ink-soft);margin-top:3px}
   .zl-package__saving{margin:16px 0;padding:11px 13px;border-radius:10px;background:var(--zl-beige-soft);color:var(--zl-mauve-deep);font-size:13px;font-weight:800}
   .zl-package .zl-btn{width:100%;text-align:center;margin-top:8px}
@@ -611,7 +615,13 @@ document.querySelectorAll('.zl-carousel').forEach(function(root){
   var track=root.querySelector('.zl-track'); if(!track) return;
   var prev=root.querySelector('.zl-arrow--prev');
   var next=root.querySelector('.zl-arrow--next');
-  var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Uwaga: NIE uzywac golego "&&" w tym pliku - niektore instalacje WP (np.
+  // wptexturize/typografia motywu) potrafia zamienic bare "&" na encje HTML
+  // "&#038;" nawet wewnatrz <script>, co psuje skladnie JS (next&&next ->
+  // next&#038;&#038;next -> SyntaxError) i wywala CALY ten blok skryptu,
+  // czyli strzalki przestaja dzialac we WSZYSTKICH karuzelach na stronie.
+  // if(){} jest odporne na ten sam blad niezaleznie od przyczyny.
+  var reduce=false; if(window.matchMedia){reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;}
   function step(){var s=track.querySelector('.zl-slide'); if(!s) return track.clientWidth;
     var cs=getComputedStyle(track); var gap=parseFloat(cs.columnGap||cs.gap)||22;
     return s.getBoundingClientRect().width+gap;}
@@ -622,8 +632,8 @@ document.querySelectorAll('.zl-carousel').forEach(function(root){
   var timer=null;
   function startA(){if(reduce)return;stopA();timer=setInterval(goNext,5000);}
   function stopA(){if(timer){clearInterval(timer);timer=null;}}
-  next&&next.addEventListener('click',function(){goNext();startA();});
-  prev&&prev.addEventListener('click',function(){goPrev();startA();});
+  if(next){next.addEventListener('click',function(){goNext();startA();});}
+  if(prev){prev.addEventListener('click',function(){goPrev();startA();});}
   root.addEventListener('mouseenter',stopA);
   root.addEventListener('mouseleave',startA);
   var st; track.addEventListener('scroll',function(){clearTimeout(st);st=setTimeout(startA,700);},{passive:true});
