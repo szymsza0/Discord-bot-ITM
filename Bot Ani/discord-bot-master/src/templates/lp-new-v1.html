@@ -601,6 +601,63 @@
 </script>
 
 <script>
+// Dostepnosc formularzy CF7 (PageSpeed: "Form elements must have labels",
+// "Select element must have an accessible name"). Formularze bywaja skladane jako
+// <label>Tekst</label><br>[pole] - etykieta stoi nad polem, ale nie jest z nim
+// powiazana. Wiazemy najblizsza wolna etykiete przez for/id; gdy jej brak -
+// aria-label z placeholdera / pierwszej opcji selecta / tekstu obok pola.
+// Bez golego ampersandu w kodzie (patrz uwaga w skrypcie karuzeli ponizej).
+(function(){
+  var seq=0;
+  function clean(t){return (t||'').replace(/\s+/g,' ').replace(/(\.\.\.|…)$/,'').trim().slice(0,120);}
+  function named(el){
+    if(el.getAttribute('aria-label')) return true;
+    if(el.getAttribute('aria-labelledby')) return true;
+    if(el.closest('label')) return true;
+    if(el.labels){ if(el.labels.length) return true; }
+    return false;
+  }
+  function freeLabelBefore(el){
+    var box=el.parentElement;
+    for(var d=0;d<4;d++){
+      if(!box) return null;
+      if(box.classList.contains('wpcf7-form')) return null;
+      var labs=box.querySelectorAll('label'), best=null;
+      for(var j=0;j<labs.length;j++){
+        var l=labs[j];
+        // for= wskazujace pole w INNYM formularzu (ten sam CF7 2x na stronie -
+        // CF7 nie powiela id w drugiej kopii) traktujemy jak etykiete wolna
+        if(l.htmlFor){ var tg=document.getElementById(l.htmlFor); if(tg){ if(tg.form===el.form) continue; } }
+        if(l.querySelector('input,select,textarea')) continue;
+        if(!clean(l.textContent)) continue;
+        // bit 4 = DOCUMENT_POSITION_FOLLOWING: pole jest za etykieta
+        if(Math.floor(l.compareDocumentPosition(el)/4)%2===1) best=l;
+      }
+      if(best) return best;
+      box=box.parentElement;
+    }
+    return null;
+  }
+  var ctrls=document.querySelectorAll('.wpcf7-form input, .wpcf7-form select, .wpcf7-form textarea');
+  for(var i=0;i<ctrls.length;i++){
+    var el=ctrls[i], t=(el.type||'').toLowerCase();
+    if(t==='hidden'||t==='submit'||t==='button') continue;
+    if(named(el)) continue;
+    var lab=freeLabelBefore(el);
+    if(lab){
+      if(!el.id) el.id='zl-f-'+(el.name||'pole').replace(/[^a-z0-9_-]/gi,'')+'-'+(++seq);
+      lab.htmlFor=el.id;
+      continue;
+    }
+    var name=clean(el.getAttribute('placeholder'));
+    if(!name){ if(el.tagName==='SELECT'){ if(el.options.length) name=clean(el.options[0].text); } }
+    if(!name){ var item=el.closest('.wpcf7-list-item')||el.parentElement; if(item) name=clean(item.textContent); }
+    if(name) el.setAttribute('aria-label',name);
+  }
+})();
+</script>
+
+<script>
 (function(){
   var el=document.getElementById('zl-time'); if(!el) return;
   var mins=parseInt(el.getAttribute('data-mins')||'15',10)||15;
