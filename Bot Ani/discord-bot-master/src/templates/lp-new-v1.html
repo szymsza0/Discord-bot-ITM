@@ -108,7 +108,10 @@
   .zl-card{background:var(--zl-card);border-radius:var(--zl-radius);padding:28px;box-shadow:var(--zl-shadow);transition:transform .25s ease, box-shadow .25s ease}
   .zl-card:hover{transform:translateY(-5px);box-shadow:var(--zl-shadow-hover)}
   .zl-carousel{position:relative;margin-top:40px}
-  .zl-track{display:flex;gap:22px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;align-items:flex-start;padding:4px 2px 12px;scrollbar-width:thin}
+  /* scroll-snap wlaczany z JS (.zl-snap) dopiero po interakcji - snap aktywny przy ladowaniu
+     powoduje w Chrome brak LCP (PageSpeed: NO_LCP) */
+  .zl-track{display:flex;gap:22px;overflow-x:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;align-items:flex-start;padding:4px 2px 12px;scrollbar-width:thin}
+  .zl-track.zl-snap{scroll-snap-type:x mandatory}
   .zl-track::-webkit-scrollbar{height:8px}
   .zl-track::-webkit-scrollbar-track{background:transparent}
   .zl-track::-webkit-scrollbar-thumb{background:rgba(58,46,43,.22);border-radius:8px}
@@ -622,6 +625,10 @@ document.querySelectorAll('.zl-carousel').forEach(function(root){
   // czyli strzalki przestaja dzialac we WSZYSTKICH karuzelach na stronie.
   // if(){} jest odporne na ten sam blad niezaleznie od przyczyny.
   var reduce=false; if(window.matchMedia){reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;}
+  // scroll-snap (.zl-snap) dopiero po pierwszej interakcji - aktywny od startu
+  // blokuje w Chrome LCP (PageSpeed: NO_LCP).
+  function snapOn(){track.classList.add('zl-snap');}
+  ['touchstart','pointerdown','wheel'].forEach(function(ev){root.addEventListener(ev,snapOn,{passive:true,once:true});});
   function step(){var s=track.querySelector('.zl-slide'); if(!s) return track.clientWidth;
     var cs=getComputedStyle(track); var gap=parseFloat(cs.columnGap||cs.gap)||22;
     return s.getBoundingClientRect().width+gap;}
