@@ -32,7 +32,7 @@
   .zl-page h1,.zl-page h2,.zl-page h3,.zl-serif{font-family:'Cormorant Garamond',serif;line-height:1.18;color:var(--zl-ink)}
   .zl-page h2{font-size:clamp(30px,4.2vw,44px);font-weight:600}
   .zl-page h3{font-size:23px;font-weight:600}
-  .zl-page img{max-width:100%;display:block;border:none}
+  .zl-page img{max-width:100%;height:auto;display:block;border:none}
   .zl-page a{color:inherit}
   .zl-wrap{max-width:var(--zl-max);margin:0 auto;padding:0 22px}
   .zl-page section{padding:76px 0}
@@ -160,6 +160,10 @@
      elementow ma dana karta (tag/saving/per), wiec sekcja bez wlasnego zapasu
      na dole potrafi konczyc sie dosłownie na krawedzi ostatniego kafelka. */
   .zl-packages{background:var(--zl-mauve-dark);color:#fff;padding-bottom:110px !important}
+  /* naglowki pinowane na bialy jak w .zl-final - ".zl-page h2" daje --zl-ink,
+     czyli ciemny tekst na ciemnym --zl-mauve-dark (PageSpeed: kontrast 1.04:1) */
+  .zl-packages h2,.zl-packages h3.zl-serif{color:#fff}
+  .zl-packages .zl-eyebrow{color:rgba(255,255,255,.72)}
   .zl-packages .zl-sub{color:rgba(255,255,255,.78)}
   .zl-packages .zl-divider{background:rgba(255,255,255,.55)}
   .zl-packages__note{display:inline-block;margin-top:15px;padding:8px 16px;border:1px solid rgba(255,255,255,.22);border-radius:999px;color:rgba(255,255,255,.85);font-size:12.5px;font-weight:600;letter-spacing:.04em}

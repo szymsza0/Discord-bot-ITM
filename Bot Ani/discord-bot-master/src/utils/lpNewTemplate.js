@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { PALETTE_KEYS } from "./lpPalette.js";
+import { ensurePaletteContrast } from "./colorContrast.js";
 
 /**
  * Renderer dla szablonu "nowy" (src/templates/lp-new-v1.html).
@@ -114,21 +115,32 @@ function applyScalarConditionals(content, tokens) {
  * @param {string} args.heroImageUrl                   URL do {{MEDIA:hero_image}}
  * @param {string} args.formShortcode                  shortcode CF7 do {{FORM_SHORTCODE}}
  * @param {Object<string,string>|null} args.palette    {cream, ink, mauveDeep, ...} #RRGGBB (generatePalette)
- * @returns {{ content:string, remainingTokens:string[], emptyRegions:string[] }}
+ * @param {Object<string,{width:number,height:number}>} args.imageDims  URL -> wymiary wgranego pliku
+ * @returns {{ content:string, remainingTokens:string[], emptyRegions:string[], paletteFixes:string[] }}
  */
 export function renderNewTemplate(
   templateHtml,
-  { tokens = {}, repeats = {}, heroImageUrl = "", formShortcode = "", palette = null }
+  { tokens = {}, repeats = {}, heroImageUrl = "", formShortcode = "", palette = null, imageDims = {} }
 ) {
   let content = templateHtml;
 
-  // 0) motyw kolorystyczny: podmien wartosci zmiennych --zl-* w :root
-  if (palette) {
-    for (const [key, cssVar] of Object.entries(PALETTE_KEYS)) {
-      const hex = palette[key];
-      if (!/^#[0-9a-fA-F]{6}$/.test(hex || "")) continue;
-      content = content.replace(new RegExp(`(${cssVar}\\s*:\\s*)#[0-9a-fA-F]{3,8}`, "g"), `$1${hex}`);
-    }
+  // 0) motyw kolorystyczny: podmien wartosci zmiennych --zl-* w :root.
+  // Paleta (z AI albo domyslna z szablonu) zawsze przechodzi przez
+  // ensurePaletteContrast - PageSpeed zglaszal tekst 4.0-4.4:1 przy wymaganych 4.5:1.
+  const current = {};
+  for (const [key, cssVar] of Object.entries(PALETTE_KEYS)) {
+    const m = content.match(new RegExp(`${cssVar}\\s*:\\s*(#[0-9a-fA-F]{6})\\b`));
+    if (m) current[key] = m[1];
+  }
+  const merged = { ...current };
+  for (const key of Object.keys(PALETTE_KEYS)) {
+    if (/^#[0-9a-fA-F]{6}$/.test((palette && palette[key]) || "")) merged[key] = palette[key];
+  }
+  const { palette: safePalette, changed: paletteFixes } = ensurePaletteContrast(merged);
+  for (const [key, cssVar] of Object.entries(PALETTE_KEYS)) {
+    const hex = safePalette[key];
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex || "")) continue;
+    content = content.replace(new RegExp(`(${cssVar}\\s*:\\s*)#[0-9a-fA-F]{3,8}`, "g"), `$1${hex}`);
   }
 
   // 0.6) sekcje w całości opcjonalne - usuń CAŁY blok <!--SECTION_IF:nazwa-->...<!--/SECTION_IF:nazwa-->
@@ -163,11 +175,25 @@ export function renderNewTemplate(
     content = content.replaceAll(`{{${token}}}`, String(value));
   }
 
+  // 4) width/height na <img> (PageSpeed: "Image elements do not have explicit
+  // width and height" -> CLS). Skalowanie i tak robi CSS (.zl-page img{height:auto}).
+  content = addImageDimensions(content, imageDims);
+
   const remainingTokens = [
     ...new Set([...content.matchAll(/\{\{[^}]+\}\}/g)].map((m) => m[0])),
   ];
 
-  return { content, remainingTokens, emptyRegions };
+  return { content, remainingTokens, emptyRegions, paletteFixes };
+}
+
+export function addImageDimensions(html, imageDims = {}) {
+  return html.replace(/<img\b[^>]*>/g, (tag) => {
+    if (/\swidth=/.test(tag)) return tag;
+    const src = (tag.match(/\ssrc="([^"]+)"/) || [])[1];
+    const d = src ? imageDims[src] : null;
+    if (!d || !d.width || !d.height) return tag;
+    return tag.replace(/^<img\b/, `<img width="${d.width}" height="${d.height}"`);
+  });
 }
 
 /**

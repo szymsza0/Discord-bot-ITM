@@ -14,7 +14,14 @@ import {
 } from "../utils/fileuploaderMedia.js";
 import { matchMediaToSlots, MediaMatchError, DEFAULT_MEDIA_SLOTS } from "../utils/mediaMatcher.js";
 import { buildPageContent } from "../utils/lpContentBuilder.js";
-import { wpGetPageRawContent, wpUploadMedia, wpCreatePage, wpUpsertSnippet } from "../utils/wordpressClient.js";
+import {
+  wpGetPageRawContent,
+  wpUploadMedia,
+  wpCreatePage,
+  wpUpsertSnippet,
+  ensureMetaDescriptionSnippet,
+  META_DESCRIPTION_KEY,
+} from "../utils/wordpressClient.js";
 import { generateNewLpCopy, NewLPGenerationError } from "../utils/lpNewGenerator.js";
 import {
   getNewLpTemplate,
@@ -52,6 +59,22 @@ function truncate(str, max) {
 function fv(value) {
   const s = String(value ?? "").trim();
   return (s || "—").slice(0, 1024);
+}
+
+// Meta description strony. Klucz rejestruje fragment z ensureMetaDescriptionSnippet()
+// - bez niego WP po cichu odrzuca nieznane meta.
+function seoMeta(copy) {
+  const d = copy?.seo?.metaDescription;
+  return d ? { [META_DESCRIPTION_KEY]: d } : undefined;
+}
+
+// Fragment od meta description - przed wpCreatePage; blad nie blokuje strony.
+async function ensureSeoSnippet() {
+  try {
+    await ensureMetaDescriptionSnippet();
+  } catch (err) {
+    console.warn("[lp] nie udalo sie zapewnic fragmentu meta description:", err.message);
+  }
 }
 
 // Rozpakowanie zbiorczego błędu walidacji discord.js (@sapphire/shapeshift),
@@ -312,7 +335,9 @@ function normalizeFormShortcode(raw) {
 // WebP + ogranicza szerokosc (strona ma byc szybka) i wgrywa do WP Media
 // Library. Wyjatek: obrazek juz zhostowany na naszym WP i juz w .webp -
 // uzywamy go wprost, bez duplikatu.
-async function resolveMediaUrl(url, seoBase) {
+// imageDims (opcjonalnie): obiekt, do ktorego trafia URL -> {width,height}
+// wgranego pliku - renderer dopisuje z tego width/height do <img>.
+async function resolveMediaUrl(url, seoBase, imageDims = null) {
   const base = (WP_BASE_URL || "").replace(/\/$/, "");
   if (base && url.startsWith(base) && /\.webp(\?|#|$)/i.test(url)) return url;
 
@@ -330,14 +355,18 @@ async function resolveMediaUrl(url, seoBase) {
       buffer = Buffer.from(await res.arrayBuffer());
     }
 
-    const opt = await optimizeToWebp(buffer, contentType);
-    try {
-      const up = await wpUploadMedia(opt.buffer, `${seoBase}.${opt.ext}`, opt.contentType, { altText: alt, title: alt });
+    // 1200px: najszersze zdjecie na LP (hero) ma ~430px CSS, wiec 2x gestosc
+    // i tak sie miesci; 1800px PageSpeed zglaszal jako "larger than it needs to be".
+    const opt = await optimizeToWebp(buffer, contentType, { maxWidth: 1200 });
+    const remember = (up) => {
+      if (imageDims && up.width && up.height) imageDims[up.sourceUrl] = { width: up.width, height: up.height };
       return up.sourceUrl;
+    };
+    try {
+      return remember(await wpUploadMedia(opt.buffer, `${seoBase}.${opt.ext}`, opt.contentType, { altText: alt, title: alt }));
     } catch (err) {
       if (!opt.converted) throw err; // np. WP w ogole nie przyjmuje uploadu
-      const up = await wpUploadMedia(buffer, `${seoBase}.${extForMime(contentType)}`, contentType, { altText: alt, title: alt });
-      return up.sourceUrl;
+      return remember(await wpUploadMedia(buffer, `${seoBase}.${extForMime(contentType)}`, contentType, { altText: alt, title: alt }));
     }
   } catch (err) {
     // Ostatnia deska ratunku: jeśli nie udało się pobrać/wgrać pliku do WP
@@ -500,12 +529,13 @@ async function runNewLpFlow(message, { inline }) {
   // jeśli operator podał chociaż zdjęcia przed/po, pierwsze z nich jest dużo
   // lepszym hero niż nic (sekcja i tak trafia na czoło strony).
   let heroImageUrl = "";
+  const imageDims = {};
   const heroSourceUrl = heroUrls[0] || baUrls[0] || null;
   if (!heroSourceUrl) {
     mediaFailures.push("HERO: nie podano prawidłowego linku (ani HERO, ani żadnego zdjęcia przed/po do zastępczego użycia)");
   } else {
     try {
-      heroImageUrl = await resolveMediaUrl(heroSourceUrl, `${businessSlug}-hero`);
+      heroImageUrl = await resolveMediaUrl(heroSourceUrl, `${businessSlug}-hero`, imageDims);
       if (!heroUrls[0]) {
         mediaFailures.push("HERO: nie podano dedykowanego zdjęcia - użyto pierwszego zdjęcia przed/po jako zastępczego, sprawdź czy pasuje");
       }
@@ -519,7 +549,7 @@ async function runNewLpFlow(message, { inline }) {
     const out = [];
     for (let i = 0; i < urls.length; i++) {
       try {
-        out.push(await resolveMediaUrl(urls[i], `${businessSlug}-${prefix}-${i + 1}`));
+        out.push(await resolveMediaUrl(urls[i], `${businessSlug}-${prefix}-${i + 1}`, imageDims));
       } catch (err) {
         console.error(`new-LP ${prefix} #${i + 1} media:`, err);
         mediaFailures.push(`${prefix} #${i + 1}`);
@@ -534,23 +564,26 @@ async function runNewLpFlow(message, { inline }) {
   const templateHtml = await getNewLpTemplate();
   const { tokens, repeats } = mapNewCopyToTemplate(copy, opResolved);
   repeats.beforeAfter = baResolved.map((u) => ({ BA_URL: u }));
-  const { content: pageBody, remainingTokens, emptyRegions } = renderNewTemplate(templateHtml, {
+  const { content: pageBody, remainingTokens, emptyRegions, paletteFixes } = renderNewTemplate(templateHtml, {
     tokens,
     repeats,
     heroImageUrl,
     formShortcode,
     palette,
+    imageDims,
   });
+  if (paletteFixes.length) console.log("[lp-new] paleta przyciemniona pod kontrast WCAG:", paletteFixes.join(", "));
   const pageContent = wrapWpHtmlBlock(pageBody);
 
   await processingMsg.edit({ embeds: [infoEmbed("⏳ Tworzę szkic strony w WordPress...")] });
+  await ensureSeoSnippet();
   let page;
   try {
     page = await wpCreatePage({
       title: copy.seo?.title || `${zabieg} - ${copy.business?.name || ""}`.trim(),
       content: pageContent,
       status: "draft",
-      meta: copy.seo?.metaDescription ? { description: copy.seo.metaDescription } : undefined,
+      meta: seoMeta(copy),
     });
   } catch (err) {
     console.error("Error creating new-LP WP page:", err);
@@ -967,13 +1000,14 @@ export async function processLpCommand(message) {
 
     const { content: pageContent, remainingTokens } = buildPageContent(templateRawContent, copy, mediaBySlot);
 
+    await ensureSeoSnippet();
     let page;
     try {
       page = await wpCreatePage({
         title: copy.seo?.title || `${zabieg} - ${copy.business?.name || ""}`.trim(),
         content: pageContent,
         status: "draft",
-        meta: copy.seo?.metaDescription ? { description: copy.seo.metaDescription } : undefined,
+        meta: seoMeta(copy),
       });
     } catch (err) {
       console.error("Error creating WP page:", err);

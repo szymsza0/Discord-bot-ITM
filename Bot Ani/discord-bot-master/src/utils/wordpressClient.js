@@ -94,7 +94,8 @@ export async function wpUploadMedia(buffer, filename, mimeType, { altText = "", 
     });
   }
 
-  return { id: created.id, sourceUrl: created.source_url };
+  const md = created.media_details || {};
+  return { id: created.id, sourceUrl: created.source_url, width: md.width || null, height: md.height || null };
 }
 
 /**
@@ -118,6 +119,55 @@ export async function wpCreatePage({ title, content, status = "draft", slug, met
     link: created.link,
     editLink: `${WP_BASE_URL.replace(/\/$/, "")}/wp-admin/post.php?post=${created.id}&action=edit`,
   };
+}
+
+/* ==========================================================================
+ *  Meta description bez wtyczki SEO. Strona nie ma Yoasta / Rank Matha, wiec
+ *  WP po cichu odrzucal `meta.description` wysylane przy tworzeniu strony
+ *  (niezarejestrowany klucz) i w <head> nie bylo opisu (PageSpeed SEO:
+ *  "Document does not have a meta description"). Globalny fragment PHP
+ *  rejestruje klucz META_DESCRIPTION_KEY w REST i wypisuje go w wp_head.
+ * ========================================================================== */
+
+export const META_DESCRIPTION_KEY = "itm_meta_description";
+const META_SNIPPET_NAME = "ITM :: meta description (LP)";
+const META_SNIPPET_CODE = `add_action('init', function () {
+  foreach (array('page', 'post') as $type) {
+    register_post_meta($type, '${META_DESCRIPTION_KEY}', array(
+      'type' => 'string',
+      'single' => true,
+      'show_in_rest' => true,
+      'sanitize_callback' => 'sanitize_text_field',
+      'auth_callback' => function () { return current_user_can('edit_posts'); },
+    ));
+  }
+});
+add_action('wp_head', function () {
+  if (!is_singular()) return;
+  // wtyczka SEO (jesli kiedys dojdzie) wypisuje opis sama - nie dubluj
+  if (defined('WPSEO_VERSION') || defined('RANK_MATH_VERSION') || defined('AIOSEO_VERSION') || defined('SEOPRESS_VERSION')) return;
+  $d = get_post_meta(get_queried_object_id(), '${META_DESCRIPTION_KEY}', true);
+  if ($d) echo '<meta name="description" content="' . esc_attr($d) . '">' . "\\n";
+}, 1);`;
+
+let metaSnippetEnsured = false;
+
+/**
+ * Upewnia sie (raz na proces), ze fragment od meta description istnieje i jest
+ * aktywny. Musi pojsc PRZED wpCreatePage - inaczej REST odrzuci meta.
+ * Blad nie jest krytyczny: strona powstaje, tylko bez opisu.
+ */
+export async function ensureMetaDescriptionSnippet() {
+  if (metaSnippetEnsured) return;
+  await wpUpsertSnippet({
+    name: META_SNIPPET_NAME,
+    code: META_SNIPPET_CODE,
+    scope: "global",
+    description: `Rejestruje ${META_DESCRIPTION_KEY} (REST) i wypisuje <meta name="description"> - zarzadzane przez bota ITM (!lp).`,
+    tags: ["itm", "seo"],
+    active: true,
+  });
+  metaSnippetEnsured = true;
 }
 
 /* ==========================================================================
