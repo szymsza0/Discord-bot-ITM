@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { PALETTE_KEYS } from "./lpPalette.js";
+import { PALETTE_KEYS, PROMO_PRICE_GREEN } from "./lpPalette.js";
 import { ensurePaletteContrast } from "./colorContrast.js";
 
 /**
@@ -136,6 +136,9 @@ export function renderNewTemplate(
   for (const key of Object.keys(PALETTE_KEYS)) {
     if (/^#[0-9a-fA-F]{6}$/.test((palette && palette[key]) || "")) merged[key] = palette[key];
   }
+  // Ceny po rabacie zawsze zielone, niezaleznie od motywu (decyzja klienta) -
+  // motyw z AI nie moze nadpisac --zl-save (wczesniej dawal np. zloto).
+  merged.save = PROMO_PRICE_GREEN;
   const { palette: safePalette, changed: paletteFixes } = ensurePaletteContrast(merged);
   for (const [key, cssVar] of Object.entries(PALETTE_KEYS)) {
     const hex = safePalette[key];

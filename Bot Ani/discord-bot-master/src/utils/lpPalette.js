@@ -12,6 +12,10 @@ const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 const MODEL = "claude-sonnet-5";
 const TOOL_NAME = "set_lp_palette";
 
+// Kolor cen po rabacie - staly dla wszystkich LP, motyw go nie zmienia
+// (renderNewTemplate wymusza go na --zl-save). Kontrast ~5.4:1 na bieli.
+export const PROMO_PRICE_GREEN = "#1E7B45";
+
 const HEX = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
 // klucz w wyniku -> nazwa zmiennej CSS w szablonie
@@ -52,7 +56,7 @@ const tool = {
       beige: { ...hexProp, description: "kolor obramowań / linii" },
       beigeSoft: { ...hexProp, description: "wypełnienie ikon / pigułek (jasne)" },
       sale: { ...hexProp, description: "kolor ceny przekreślonej - kontrastowy, zwykle czerwony/terakota" },
-      save: { ...hexProp, description: "kolor ceny promocyjnej / oszczędności - zwykle zielony" },
+      save: { ...hexProp, description: "kolor ceny promocyjnej - ignorowany, zawsze zielony (PROMO_PRICE_GREEN)" },
     },
     required: Object.keys(PALETTE_KEYS),
   },
