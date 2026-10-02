@@ -203,18 +203,22 @@
   .zl-form-box .wpcf7-form input[type=date],
   .zl-form-box .wpcf7-form input[type=number],
   .zl-form-box .wpcf7-form select,
+  /* ZASADA KONTRASTU POL: pole musi odcinac sie od tla - biale tlo pola + ramka
+     o kontrascie min. 3:1 wzgledem tla karty i pola (WCAG 1.4.11), placeholder min. 4.5:1.
+     NIE uzywac tla pola w kolorze zblizonym do tla karty ani jasnej ramki typu --zl-beige.
+     mauve #8C7370 na karcie #FFFCF9 = 4.3:1 */
   .zl-form-box .wpcf7-form textarea{
-    width:100%;background:#FBF5EE;border:1.5px solid var(--zl-beige);color:var(--zl-ink);
+    width:100%;background:#fff;border:1.5px solid var(--zl-mauve);color:var(--zl-ink);
     font-family:'Inter',sans-serif;font-size:1rem;padding:14px 18px;border-radius:12px;box-sizing:border-box;
     transition:background .25s ease,border-color .25s ease,box-shadow .25s ease}
   .zl-form-box .wpcf7-form textarea{min-height:120px;resize:vertical}
   .zl-form-box .wpcf7-form select,
   .zl-form-box .wpcf7-form select option{color:var(--zl-ink)}
   .zl-form-box .wpcf7-form input::placeholder,
-  .zl-form-box .wpcf7-form textarea::placeholder{color:var(--zl-ink-soft);opacity:.7}
+  .zl-form-box .wpcf7-form textarea::placeholder{color:var(--zl-ink-soft);opacity:1}
   .zl-form-box .wpcf7-form input:focus,
   .zl-form-box .wpcf7-form select:focus,
-  .zl-form-box .wpcf7-form textarea:focus{outline:none;background:#fff;border-color:var(--zl-mauve);box-shadow:0 0 0 3px rgba(140,115,112,.15)}
+  .zl-form-box .wpcf7-form textarea:focus{outline:none;background:#fff;border-color:var(--zl-mauve-dark);box-shadow:0 0 0 3px rgba(140,115,112,.22)}
   .zl-form-box .wpcf7-form .zl-consent,
   .zl-form-box .wpcf7-form label.zl-consent{font-weight:400;font-size:.82rem;color:var(--zl-ink-soft);line-height:1.5}
   .zl-form-box .wpcf7-form input[type=checkbox]{width:auto;margin-right:10px;accent-color:var(--zl-mauve-deep);transform:scale(1.15);cursor:pointer}

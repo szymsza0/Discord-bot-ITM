@@ -30,3 +30,18 @@ Komendy w `src/commands/`, narzędzia w `src/utils/`, routing w `src/index.js`.
 Wzorzec generacji AI: tool-use + walidacja zod + jedna runda naprawy
 (patrz `scriptGenerator.js`, `lpGenerator.js`, `lpNewGenerator.js`).
 ENV: patrz `Bot Ani/discord-bot-master/.env.example` + `src/config.js`.
+
+## Zasady dla generowanych LP / formularzy (WordPress, zapisy-beauty.pl)
+
+- **Kontrast pól formularza:** pole (input/select/textarea) musi wyraźnie odcinać
+  się od tła - białe tło pola + ramka o kontraście min. 3:1 względem tła karty
+  i pola (WCAG 1.4.11), placeholder min. 4.5:1. Nie używać tła pola w kolorze
+  zbliżonym do tła karty ani jasnych ramek (np. beż na kremowym). Przed
+  wdrożeniem policz kontrast, nie oceniaj "na oko".
+- **Brak `&` w JS wklejanym w treść strony** - WordPress zamienia `&&` na
+  `&#038;&#038;` i cały skrypt pada (tak padły karuzele na 12 LP). Warunki
+  pisz jako `if(x){...}`. Kod w snippetach WPCode tego problemu nie ma.
+- Formularze CF7 na wszystkich stronach przechodzi globalny snippet WPCode
+  „[ALL] Formularz krok po kroku” (ID 2009, max 4 kroki) - nowe pola muszą
+  być w `<p>`/`.zl-cf7-field` z `.wpcf7-form-control-wrap`, żeby skrypt je
+  pogrupował. Snippety WPCode typu JavaScript: sam kod, bez `<script>` i `<!-- -->`.
