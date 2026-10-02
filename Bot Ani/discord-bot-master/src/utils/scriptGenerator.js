@@ -1,6 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { ANTHROPIC_API_KEY } from "../config.js";
+import {
+  PROBLEM_AWARE_HOOK_COUNT,
+  PROBLEM_AWARE_REFERENCE_SCRIPT,
+  PROBLEM_AWARE_RULES,
+} from "./problemAwareTemplate.js";
 
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
@@ -12,6 +17,26 @@ export const ScriptVariantSchema = z.object({
   rolka: z.object({
     hook: z.string().min(10),
     hookVariantB: z.string().min(10).optional(),
+    body: z.array(z.string().min(10)).min(3).max(5),
+    promocja: z.string().min(10),
+    cta: z.string().min(5),
+  }),
+  krotszaRolka: z.object({ tekst: z.string().min(20) }),
+  sugerowanaNazwaPliku: z.string().min(5),
+});
+
+export const SCRIPT_TYPES = {
+  STANDARD: "standard",
+  PROBLEM_AWARE: "problem_aware",
+};
+
+// Problem-aware variants carry 5 alternative hooks instead of hook + hook B.
+// rolka.hook is still filled (= hooks[0]) so downstream code that only knows
+// about a single hook keeps working.
+export const ProblemAwareVariantSchema = z.object({
+  variantLabel: z.string().min(1),
+  rolka: z.object({
+    hooks: z.array(z.string().min(10)).length(PROBLEM_AWARE_HOOK_COUNT),
     body: z.array(z.string().min(10)).min(3).max(5),
     promocja: z.string().min(10),
     cta: z.string().min(5),
@@ -66,6 +91,57 @@ const generateScriptVariantTool = {
       sugerowanaNazwaPliku: {
         type: "string",
         description: "Sugerowana nazwa dokumentu wg schematu '[Klient] - [zabieg] - skrypty i wskazowki | ITM'.",
+      },
+    },
+    required: ["variantLabel", "rolka", "krotszaRolka", "sugerowanaNazwaPliku"],
+  },
+};
+
+const PROBLEM_AWARE_TOOL_NAME = "generate_problem_aware_script_variant";
+
+const generateProblemAwareVariantTool = {
+  name: PROBLEM_AWARE_TOOL_NAME,
+  description:
+    `Zwraca jeden kompletny wariant skryptu typu PROBLEM AWARE: ${PROBLEM_AWARE_HOOK_COUNT} alternatywnych hookow adresujacych grupe docelowa (lokalizacja + wiek), Kwestie 1..N, Promocja, CTA oraz krotsza rolka.`,
+  input_schema: {
+    type: "object",
+    properties: {
+      variantLabel: {
+        type: "string",
+        description: "Krotka etykieta kata tego wariantu, np. 'Wstyd bez makijazu'.",
+      },
+      rolka: {
+        type: "object",
+        properties: {
+          hooks: {
+            type: "array",
+            items: { type: "string" },
+            minItems: PROBLEM_AWARE_HOOK_COUNT,
+            maxItems: PROBLEM_AWARE_HOOK_COUNT,
+            description: `Dokladnie ${PROBLEM_AWARE_HOOK_COUNT} alternatywnych hookow, kazdy z innym katem; wiekszosc z lokalizacja i konkretnym przedzialem wieku.`,
+          },
+          body: {
+            type: "array",
+            items: { type: "string" },
+            minItems: 3,
+            maxItems: 5,
+            description: "3-5 blokow 'Kwestia N': empatia/problem -> jest sposob + dowod -> zasluga/emocja.",
+          },
+          promocja: { type: "string", description: "Blok promocji." },
+          cta: { type: "string", description: "Wezwanie do dzialania." },
+        },
+        required: ["hooks", "body", "promocja", "cta"],
+      },
+      krotszaRolka: {
+        type: "object",
+        properties: {
+          tekst: { type: "string", description: "Skondensowana wersja rolki 15-30s w jednym akapicie." },
+        },
+        required: ["tekst"],
+      },
+      sugerowanaNazwaPliku: {
+        type: "string",
+        description: "Sugerowana nazwa dokumentu wg schematu '[Klient] - [zabieg] (problem aware) - skrypty i wskazowki | ITM'.",
       },
     },
     required: ["variantLabel", "rolka", "krotszaRolka", "sugerowanaNazwaPliku"],
@@ -165,17 +241,41 @@ function formatZodErrorForClaude(error) {
   return error.issues.map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`).join("; ");
 }
 
-function extractAndValidate(response) {
+function extractAndValidate(response, schema) {
   const toolUse = response.content.find((block) => block.type === "tool_use");
   if (!toolUse) return { toolUse: null, parsed: { success: false, error: null } };
-  const parsed = ScriptVariantSchema.safeParse(toolUse.input);
+  const parsed = schema.safeParse(toolUse.input);
   return { toolUse, parsed };
 }
 
-function buildUserPrompt({ klient, zabiegi, briefsText, referenceScriptText, variantIndex, totalVariants, previousVariantSummaries }) {
+function buildUserPrompt({
+  klient,
+  zabiegi,
+  briefsText,
+  referenceScriptText,
+  variantIndex,
+  totalVariants,
+  previousVariantSummaries,
+  scriptType,
+  grupaDocelowa,
+  toolName,
+}) {
+  const isProblemAware = scriptType === SCRIPT_TYPES.PROBLEM_AWARE;
   const parts = [];
   parts.push(`Klient: ${klient}`);
   parts.push(`Zabieg(i) do uwzglednienia w tym skrypcie: ${zabiegi.join(", ")}`);
+  if (isProblemAware) {
+    parts.push(PROBLEM_AWARE_RULES);
+    parts.push(
+      grupaDocelowa
+        ? `Grupa docelowa (uzyj w hookach - lokalizacja i wiek): ${grupaDocelowa}`
+        : "Grupa docelowa nie zostala podana wprost - ustal lokalizacje i przedzial wieku z briefu, a jesli ich brak, dobierz typowy przedzial wieku dla tego zabiegu."
+    );
+    parts.push(
+      "--- WZOR SKRYPTU PROBLEM AWARE (bazowa struktura, ton i rytm - przenies na ten zabieg i klienta, NIE kopiuj zdan 1:1) ---\n" +
+        PROBLEM_AWARE_REFERENCE_SCRIPT
+    );
+  }
   parts.push(`To jest wariant ${variantIndex} z ${totalVariants} generowanych w tej samej turze.`);
 
   if (previousVariantSummaries.length) {
@@ -189,12 +289,14 @@ function buildUserPrompt({ klient, zabiegi, briefsText, referenceScriptText, var
 
   if (referenceScriptText) {
     parts.push(
-      "--- PRZYKLADOWY, WCZESNIEJSZY SKRYPT DLA TEJ SAMEJ KATEGORII ZABIEGU (inspiracja stylem i tonem, NIE kopiuj tresci ani konkretow klienta) ---\n" +
+      (isProblemAware
+        ? "--- WCZESNIEJSZE SKRYPTY PROBLEM AWARE Z BAZY (inspiracja stylem i tonem, NIE kopiuj tresci ani konkretow klienta) ---\n"
+        : "--- PRZYKLADOWY, WCZESNIEJSZY SKRYPT DLA TEJ SAMEJ KATEGORII ZABIEGU (inspiracja stylem i tonem, NIE kopiuj tresci ani konkretow klienta) ---\n") +
         referenceScriptText
     );
   }
 
-  parts.push(`Napisz nowy, oryginalny skrypt reklamowy zgodny z powyzszymi wytycznymi, wywolujac narzedzie ${TOOL_NAME}.`);
+  parts.push(`Napisz nowy, oryginalny skrypt reklamowy zgodny z powyzszymi wytycznymi, wywolujac narzedzie ${toolName}.`);
   return parts.join("\n\n");
 }
 
@@ -219,7 +321,13 @@ export async function generateScriptVariant({
   variantIndex,
   totalVariants,
   previousVariantSummaries = [],
+  scriptType = SCRIPT_TYPES.STANDARD,
+  grupaDocelowa = null,
 }) {
+  const isProblemAware = scriptType === SCRIPT_TYPES.PROBLEM_AWARE;
+  const toolName = isProblemAware ? PROBLEM_AWARE_TOOL_NAME : TOOL_NAME;
+  const schema = isProblemAware ? ProblemAwareVariantSchema : ScriptVariantSchema;
+
   const messages = [
     {
       role: "user",
@@ -231,6 +339,9 @@ export async function generateScriptVariant({
         variantIndex,
         totalVariants,
         previousVariantSummaries,
+        scriptType,
+        grupaDocelowa,
+        toolName,
       }),
     },
   ];
@@ -239,12 +350,12 @@ export async function generateScriptVariant({
     model: GENERATION_MODEL,
     max_tokens: 4096,
     system: [{ type: "text", text: templateRulesText, cache_control: { type: "ephemeral" } }],
-    tools: [generateScriptVariantTool],
-    tool_choice: { type: "tool", name: TOOL_NAME },
+    tools: [isProblemAware ? generateProblemAwareVariantTool : generateScriptVariantTool],
+    tool_choice: { type: "tool", name: toolName },
   };
 
   let response = await anthropic.messages.create({ ...baseParams, messages });
-  let { toolUse, parsed } = extractAndValidate(response);
+  let { toolUse, parsed } = extractAndValidate(response, schema);
 
   if (!parsed.success) {
     if (toolUse) {
@@ -256,7 +367,7 @@ export async function generateScriptVariant({
             type: "tool_result",
             tool_use_id: toolUse.id,
             is_error: true,
-            content: `Odpowiedz nie przeszla walidacji schematu, popraw ja i wywolaj narzedzie ${TOOL_NAME} ponownie z poprawnymi argumentami. Bledy: ${formatZodErrorForClaude(
+            content: `Odpowiedz nie przeszla walidacji schematu, popraw ja i wywolaj narzedzie ${toolName} ponownie z poprawnymi argumentami. Bledy: ${formatZodErrorForClaude(
               parsed.error
             )}`,
           },
@@ -265,12 +376,12 @@ export async function generateScriptVariant({
     } else {
       messages.push({
         role: "user",
-        content: `Nie wywolales narzedzia ${TOOL_NAME}. Sprobuj ponownie i wywolaj wylacznie to narzedzie z kompletnymi argumentami.`,
+        content: `Nie wywolales narzedzia ${toolName}. Sprobuj ponownie i wywolaj wylacznie to narzedzie z kompletnymi argumentami.`,
       });
     }
 
     response = await anthropic.messages.create({ ...baseParams, messages });
-    ({ toolUse, parsed } = extractAndValidate(response));
+    ({ toolUse, parsed } = extractAndValidate(response, schema));
   }
 
   if (!parsed.success) {
@@ -280,5 +391,9 @@ export async function generateScriptVariant({
     );
   }
 
-  return parsed.data;
+  if (isProblemAware) {
+    const data = parsed.data;
+    return { ...data, scriptType, rolka: { ...data.rolka, hook: data.rolka.hooks[0] } };
+  }
+  return { ...parsed.data, scriptType };
 }

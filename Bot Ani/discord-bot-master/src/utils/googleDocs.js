@@ -94,9 +94,17 @@ function appendVariant(b, variant, showVariantHeading) {
 
   b.styledLine("Rolka - skrypt:", "HEADING_2");
   b.blank();
-  b.styledLine("Hook:", "BOLD");
-  b.line(variant.rolka.hook);
-  b.blank();
+  if (variant.rolka.hooks?.length) {
+    variant.rolka.hooks.forEach((hook, i) => {
+      b.styledLine(`Hook ${i + 1}:`, "BOLD");
+      b.line(hook);
+      b.blank();
+    });
+  } else {
+    b.styledLine("Hook:", "BOLD");
+    b.line(variant.rolka.hook);
+    b.blank();
+  }
 
   if (variant.rolka.hookVariantB) {
     b.styledLine("Hook B (wariant testowy):", "BOLD");

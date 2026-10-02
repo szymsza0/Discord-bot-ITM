@@ -64,17 +64,27 @@ Każdy wygenerowany skrypt trafia jako nowy Google Doc do wskazanego folderu
 Drive, dostaje dołączone wskazówki nagraniowe, i zostaje dopisany jako nowy
 wiersz w arkuszu bazy skryptów.
 
-- `!skrypt` - uruchamia rozmowę: pyta o klienta, liczbę wariantów (1-3,
-  domyślnie 2), zabieg(i) (do 2, wybór z listy z arkusza) i link(i) do
-  briefu.
+- `!skrypt` - uruchamia rozmowę: pyta o klienta, typ skryptu, liczbę
+  wariantów (1-3, domyślnie 2), zabieg(i) (do 2, wybór z listy z arkusza) i
+  link(i) do briefu.
+- Typy skryptu: **Standardowy** albo **Problem aware** - ten drugi bazuje na
+  osobnym wzorze (`src/utils/problemAwareTemplate.js`, zapisanym też w bazie
+  jako wiersz klienta „Wzór ITM”), proponuje 5 hooków adresujących miasto i
+  wiek (bot dopyta o grupę docelową) i trafia do arkusza z dopiskiem
+  `(problem aware)` przy nazwie zabiegu.
+- Lista zabiegów jest scalana w grupy (np. depilacja/epilacja, botoks, usta,
+  rzęsy) - reguły w `src/utils/zabiegCategories.js`.
 - Można też podać wszystko od razu, po jednym polu na linię:
   ```
   !skrypt
   klient: PB Pado Body Shape
   warianty: 2
   zabiegi: Epilacja, RF
+  typ: problem aware
+  grupa: kobiety 18-45, Wrocław
   brief: https://docs.google.com/document/d/...
   ```
 - `!skrypt admin refresh` - wymusza ponowne pobranie dokumentu z ogólnym
-  wzorem/wytycznymi (domyślnie pobierany raz i trzymany w pamięci procesu).
+  wzorem/wytycznymi (domyślnie pobierany raz i trzymany w pamięci procesu)
+  i dopisuje wzór problem aware do bazy, jeśli go tam jeszcze nie ma.
 

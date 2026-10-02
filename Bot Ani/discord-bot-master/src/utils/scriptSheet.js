@@ -1,4 +1,6 @@
 import { getSheetsClient } from "./googleAuth.js";
+import { groupZabiegCategories, isProblemAwareZabieg, zabiegMatches } from "./zabiegCategories.js";
+import { PROBLEM_AWARE_SEED_KLIENT } from "./problemAwareTemplate.js";
 
 const REQUIRED_HEADER_LABELS = {
   czyj: "Czyj?",
@@ -101,46 +103,68 @@ async function listDistinctColumnValues(spreadsheetId, columnKey) {
 }
 
 /**
- * Returns the distinct, non-empty "Zabieg" values currently in the sheet,
- * sorted alphabetically - used to populate the treatment picker in Discord.
+ * Returns the treatment picker list: raw "Zabieg" values grouped into
+ * canonical categories (depilacja/epilacja etc. merged, "A + B" combos split,
+ * "(problem aware)" tag stripped) - see zabiegCategories.js.
  */
 export async function listZabiegCategories(spreadsheetId) {
-  return listDistinctColumnValues(spreadsheetId, "zabieg");
+  return groupZabiegCategories(await listDistinctColumnValues(spreadsheetId, "zabieg"));
 }
 
 /**
  * Returns the distinct, non-empty "Klient" values currently in the sheet,
  * sorted alphabetically - used to populate the client picker in Discord.
+ * The seeded problem-aware pattern row is not a real client, so it's hidden.
  */
 export async function listKlienci(spreadsheetId) {
-  return listDistinctColumnValues(spreadsheetId, "klient");
+  const klienci = await listDistinctColumnValues(spreadsheetId, "klient");
+  return klienci.filter((k) => normalize(k) !== normalize(PROBLEM_AWARE_SEED_KLIENT));
+}
+
+async function readDataRows(spreadsheetId) {
+  const { headerRowIndex, columnMap, sheetName } = await findHeaderRow(spreadsheetId);
+  const sheets = getSheetsClient();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetName}!A${headerRowIndex + 2}:Z`,
+  });
+  return (res.data.values || []).map((row) => ({
+    czyj: row[columnMap.czyj] || "",
+    klient: row[columnMap.klient] || "",
+    briefLink: row[columnMap.briefLink] || "",
+    skryptLink: row[columnMap.skryptLink] || "",
+    zabieg: row[columnMap.zabieg] || "",
+  }));
 }
 
 /**
- * Returns the first sheet row whose Zabieg column matches the given
- * category (case-insensitive), used as a single style/reference example for
+ * Returns the first standard (non-problem-aware) row whose Zabieg falls in
+ * the same canonical category, used as a single style/reference example for
  * the AI generator. Returns null if no past script exists for that category.
  */
 export async function findReferenceScriptForZabieg(spreadsheetId, zabieg) {
-  const { headerRowIndex, columnMap, sheetName } = await findHeaderRow(spreadsheetId);
-  const sheets = getSheetsClient();
-  const startRow = headerRowIndex + 2;
+  const rows = await readDataRows(spreadsheetId);
+  return rows.find((r) => !isProblemAwareZabieg(r.zabieg) && zabiegMatches(r.zabieg, zabieg)) || null;
+}
 
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${sheetName}!A${startRow}:Z`,
-  });
+/**
+ * Returns up to `limit` problem-aware rows to use as examples, those for the
+ * same treatment category first, then the newest of the rest (which always
+ * includes the seeded base pattern once it's in the sheet).
+ */
+export async function findProblemAwareReferences(spreadsheetId, zabiegi, limit = 2) {
+  const rows = (await readDataRows(spreadsheetId)).filter((r) => isProblemAwareZabieg(r.zabieg) && r.skryptLink);
+  const sameCategory = rows.filter((r) => zabiegi.some((z) => zabiegMatches(r.zabieg, z)));
+  const others = rows.filter((r) => !sameCategory.includes(r)).reverse();
+  return [...sameCategory, ...others].slice(0, limit);
+}
 
-  const rows = res.data.values || [];
-  const match = rows.find((row) => normalize(row[columnMap.zabieg]) === normalize(zabieg));
-  if (!match) return null;
-
-  return {
-    czyj: match[columnMap.czyj] || "",
-    klient: match[columnMap.klient] || "",
-    briefLink: match[columnMap.briefLink] || "",
-    skryptLink: match[columnMap.skryptLink] || "",
-  };
+/** True if the seeded problem-aware base pattern row already exists. */
+export async function hasProblemAwareSeed(spreadsheetId) {
+  const rows = await readDataRows(spreadsheetId);
+  return rows.some(
+    (r) => normalize(r.klient) === normalize(PROBLEM_AWARE_SEED_KLIENT) && isProblemAwareZabieg(r.zabieg)
+  );
 }
 
 /**

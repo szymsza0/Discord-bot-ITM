@@ -12,6 +12,8 @@ import {
   findReferenceScriptForZabieg,
   findClientHistory,
   appendScriptRow,
+  findProblemAwareReferences,
+  hasProblemAwareSeed,
 } from "../utils/scriptSheet.js";
 import { getScriptTemplate, FIXED_CTA_NOTE } from "../utils/scriptTemplate.js";
 import {
@@ -20,7 +22,18 @@ import {
   createFormattedScriptDoc,
   moveDocToFolder,
 } from "../utils/googleDocs.js";
-import { generateScriptVariant, analyzeBriefCoverage, ScriptGenerationError } from "../utils/scriptGenerator.js";
+import {
+  generateScriptVariant,
+  analyzeBriefCoverage,
+  ScriptGenerationError,
+  SCRIPT_TYPES,
+} from "../utils/scriptGenerator.js";
+import { canonicalZabieg, tagProblemAware } from "../utils/zabiegCategories.js";
+import {
+  PROBLEM_AWARE_REFERENCE_SCRIPT,
+  PROBLEM_AWARE_SEED_KLIENT,
+  PROBLEM_AWARE_SEED_ZABIEG,
+} from "../utils/problemAwareTemplate.js";
 import { integrateScriptFeedback } from "../utils/feedbackIntegrator.js";
 
 const FEEDBACK_PROMPT_TIMEOUT_MS = 180000;
@@ -63,11 +76,11 @@ function looksLikeLinkList(text) {
 }
 
 function parseInlineArgs(content) {
-  const result = { klient: null, warianty: null, zabiegi: null, brief: null };
+  const result = { klient: null, warianty: null, zabiegi: null, brief: null, typ: null, grupa: null };
   if (!content) return result;
 
   for (const line of content.split("\n")) {
-    const match = line.match(/^\s*(klient|warianty|zabiegi?|brief(?:y)?)\s*:\s*(.+)$/i);
+    const match = line.match(/^\s*(klient|warianty|zabiegi?|brief(?:y)?|typ|grupa)\s*:\s*(.+)$/i);
     if (!match) continue;
     const key = match[1].toLowerCase();
     const value = match[2].trim();
@@ -77,6 +90,8 @@ function parseInlineArgs(content) {
     else if (key.startsWith("zabieg"))
       result.zabiegi = value.split(",").map((s) => s.trim()).filter(Boolean);
     else if (key.startsWith("brief")) result.brief = value;
+    else if (key === "typ") result.typ = /problem/i.test(value) ? SCRIPT_TYPES.PROBLEM_AWARE : SCRIPT_TYPES.STANDARD;
+    else if (key === "grupa") result.grupa = value;
   }
 
   return result;
@@ -203,6 +218,71 @@ async function askVariantCount(message) {
       .catch(() => {});
     return DEFAULT_VARIANTS;
   }
+}
+
+/**
+ * Button row choosing the script pattern: the standard ITM script, or
+ * "Problem aware" (5 hooks addressing location + age, built on the
+ * problem-aware base pattern - see utils/problemAwareTemplate.js).
+ */
+async function askScriptType(message) {
+  const stamp = Date.now();
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`skrypt_typ_${SCRIPT_TYPES.STANDARD}_${stamp}`)
+      .setLabel("Standardowy (domyślnie)")
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`skrypt_typ_${SCRIPT_TYPES.PROBLEM_AWARE}_${stamp}`)
+      .setLabel("Problem aware (5 hooków)")
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  const promptMessage = await message.channel.send({ content: "🧩 Jaki typ skryptu?", components: [row] });
+  const filter = (interaction) =>
+    interaction.user.id === message.author.id && interaction.customId.endsWith(`_${stamp}`);
+
+  try {
+    const interaction = await promptMessage.awaitMessageComponent({ filter, time: COMPONENT_TIMEOUT_MS });
+    const type = interaction.customId.includes(SCRIPT_TYPES.PROBLEM_AWARE)
+      ? SCRIPT_TYPES.PROBLEM_AWARE
+      : SCRIPT_TYPES.STANDARD;
+    await interaction.update({ content: `✅ Typ skryptu: ${scriptTypeLabel(type)}`, components: [] });
+    return type;
+  } catch {
+    await promptMessage
+      .edit({ content: "⌛ Czas minął — użyto skryptu standardowego.", components: [] })
+      .catch(() => {});
+    return SCRIPT_TYPES.STANDARD;
+  }
+}
+
+function scriptTypeLabel(type) {
+  return type === SCRIPT_TYPES.PROBLEM_AWARE ? "Problem aware" : "Standardowy";
+}
+
+/**
+ * Makes sure the problem-aware base pattern is stored in the scripts sheet
+ * (as its own doc + a "(problem aware)" row), so it sits in the same database
+ * as every other script. Idempotent and best-effort: generation still works
+ * from the embedded pattern if this fails.
+ */
+async function ensureProblemAwareSeed() {
+  if (await hasProblemAwareSeed(GOOGLE_SCRIPTS_SHEET_ID)) return false;
+
+  const zabieg = tagProblemAware(PROBLEM_AWARE_SEED_ZABIEG);
+  const title = `${PROBLEM_AWARE_SEED_KLIENT} - ${zabieg} - skrypty i wskazówki | ITM`;
+  const text = `${title}\n\n${PROBLEM_AWARE_REFERENCE_SCRIPT}\n`;
+  const docId = await createFormattedScriptDoc(title, text, [{ start: 0, end: title.length, style: "HEADING_1" }]);
+  await moveDocToFolder(docId, GOOGLE_SCRIPTS_DRIVE_FOLDER_ID);
+  await appendScriptRow(GOOGLE_SCRIPTS_SHEET_ID, {
+    czyj: "Bot (wzór problem aware)",
+    klient: PROBLEM_AWARE_SEED_KLIENT,
+    briefLink: "-",
+    skryptLink: `https://docs.google.com/document/d/${docId}/edit`,
+    zabieg,
+  });
+  return true;
 }
 
 /**
@@ -351,8 +431,14 @@ export async function processSkryptCommand(message) {
     if (/^(admin\s+refresh|odśwież|odswiez)$/i.test(content)) {
       try {
         await getScriptTemplate({ forceRefresh: true });
+        let seedNote = "";
+        try {
+          if (await ensureProblemAwareSeed()) seedNote = "\n➕ Dodano wzór skryptu problem aware do bazy.";
+        } catch (err) {
+          seedNote = `\n⚠️ Nie udało się dodać wzoru problem aware do bazy: ${err.message}`;
+        }
         return message.reply({
-          embeds: [new EmbedBuilder().setColor("#00FF00").setDescription("✅ Szablon skryptów odświeżony.")],
+          embeds: [new EmbedBuilder().setColor("#00FF00").setDescription(`✅ Szablon skryptów odświeżony.${seedNote}`)],
         });
       } catch (err) {
         return message.reply({ embeds: [errorEmbed(`Nie udało się odświeżyć szablonu: ${err.message}`)] });
@@ -366,6 +452,9 @@ export async function processSkryptCommand(message) {
       klient = await askClient(message);
       if (!klient) return;
     }
+
+    const scriptType = inline.typ || (await askScriptType(message));
+    const isProblemAware = scriptType === SCRIPT_TYPES.PROBLEM_AWARE;
 
     let warianty = inline.warianty ? parseInt(inline.warianty, 10) : NaN;
     if (Number.isNaN(warianty)) {
@@ -390,14 +479,26 @@ export async function processSkryptCommand(message) {
     let zabiegi = inline.zabiegi;
     if (zabiegi) {
       zabiegi = zabiegi.map((z) => {
-        const known = categories.find((c) => c.toLowerCase() === z.toLowerCase());
-        return known || z; // unknown value = a new, custom treatment name
+        const canonical = canonicalZabieg(z);
+        const known = categories.find((c) => c.toLowerCase() === canonical.toLowerCase());
+        return known || canonical; // unknown value = a new, custom treatment name
       });
     } else {
       zabiegi = await askTreatments(message, categories);
       if (!zabiegi) return;
     }
     zabiegi = zabiegi.slice(0, MAX_TREATMENTS_PER_SCRIPT);
+
+    let grupaDocelowa = inline.grupa;
+    if (isProblemAware && !grupaDocelowa) {
+      grupaDocelowa = await askText(
+        message,
+        "🎯 Do kogo kierujemy hooki? Podaj miasto i przedział wieku, np. `kobiety 18-45, Wrocław`.\n" +
+          "Napisz `auto`, żeby bot dobrał wiek i lokalizację z briefu."
+      );
+      if (grupaDocelowa === null) return;
+    }
+    if (grupaDocelowa && /^auto$/i.test(grupaDocelowa.trim())) grupaDocelowa = null;
 
     const templateMsg = await message.channel.send({
       embeds: [infoEmbed("⏳ Pobieram szablon skryptów...")],
@@ -552,6 +653,8 @@ export async function processSkryptCommand(message) {
           .setTitle("📝 Podsumowanie")
           .addFields(
             { name: "Klient", value: klient },
+            { name: "Typ skryptu", value: scriptTypeLabel(scriptType) },
+            ...(isProblemAware ? [{ name: "Grupa docelowa", value: grupaDocelowa || "auto (z briefu)" }] : []),
             { name: "Zabiegi", value: zabiegi.join(", ") },
             { name: "Liczba wariantów", value: String(warianty) },
             {
@@ -583,18 +686,40 @@ export async function processSkryptCommand(message) {
     }
 
     let referenceScriptText = null;
-    try {
-      const refTexts = [];
-      for (const zabieg of zabiegi) {
-        const ref = await findReferenceScriptForZabieg(GOOGLE_SCRIPTS_SHEET_ID, zabieg);
-        if (ref?.skryptLink && extractGoogleDocId(ref.skryptLink)) {
-          const text = await fetchDocTextCached(ref.skryptLink);
-          refTexts.push(`Zabieg: ${zabieg} (klient: ${ref.klient}):\n${text}`);
-        }
+    if (isProblemAware) {
+      try {
+        await ensureProblemAwareSeed();
+      } catch (err) {
+        console.warn("Nie udało się zapisać wzoru problem aware w bazie:", err.message);
       }
-      referenceScriptText = refTexts.length ? refTexts.join("\n\n---\n\n") : null;
-    } catch (err) {
-      console.warn("Nie udało się pobrać przykładowego skryptu referencyjnego:", err);
+      try {
+        const refs = await findProblemAwareReferences(GOOGLE_SCRIPTS_SHEET_ID, zabiegi);
+        const refTexts = [];
+        for (const ref of refs) {
+          if (!extractGoogleDocId(ref.skryptLink)) continue;
+          // The seeded base pattern is already embedded in the prompt verbatim.
+          if (ref.klient === PROBLEM_AWARE_SEED_KLIENT) continue;
+          const text = await fetchDocTextCached(ref.skryptLink);
+          refTexts.push(`Zabieg: ${ref.zabieg} (klient: ${ref.klient}):\n${text}`);
+        }
+        referenceScriptText = refTexts.length ? refTexts.join("\n\n---\n\n") : null;
+      } catch (err) {
+        console.warn("Nie udało się pobrać skryptów problem aware z bazy:", err);
+      }
+    } else {
+      try {
+        const refTexts = [];
+        for (const zabieg of zabiegi) {
+          const ref = await findReferenceScriptForZabieg(GOOGLE_SCRIPTS_SHEET_ID, zabieg);
+          if (ref?.skryptLink && extractGoogleDocId(ref.skryptLink)) {
+            const text = await fetchDocTextCached(ref.skryptLink);
+            refTexts.push(`Zabieg: ${zabieg} (klient: ${ref.klient}):\n${text}`);
+          }
+        }
+        referenceScriptText = refTexts.length ? refTexts.join("\n\n---\n\n") : null;
+      } catch (err) {
+        console.warn("Nie udało się pobrać przykładowego skryptu referencyjnego:", err);
+      }
     }
 
     const variants = [];
@@ -613,9 +738,14 @@ export async function processSkryptCommand(message) {
           variantIndex: i,
           totalVariants: warianty,
           previousVariantSummaries,
+          scriptType,
+          grupaDocelowa,
         });
         variants.push(variant);
-        previousVariantSummaries.push(`${variant.variantLabel} - hook: "${variant.rolka.hook}"`);
+        const hooksSummary = variant.rolka.hooks
+          ? `hooki: ${variant.rolka.hooks.map((h) => `"${h}"`).join(" | ")}`
+          : `hook: "${variant.rolka.hook}"`;
+        previousVariantSummaries.push(`${variant.variantLabel} - ${hooksSummary}`);
       } catch (err) {
         if (err instanceof ScriptGenerationError) {
           await message.channel.send({
@@ -633,7 +763,8 @@ export async function processSkryptCommand(message) {
 
     // All variants from this one request go into a single doc/sheet row, not
     // one per variant, so one !skrypt call always yields exactly one link.
-    const docTitle = `${klient} - ${zabiegi.join(" + ")} - skrypty i wskazówki | ITM`;
+    const zabiegLabel = isProblemAware ? tagProblemAware(zabiegi.join(" + ")) : zabiegi.join(" + ");
+    const docTitle = `${klient} - ${zabiegLabel} - skrypty i wskazówki | ITM`;
     let docUrl;
     try {
       const { text, spans } = buildScriptDocContent(docTitle, variants, template.recordingInstructionsText);
@@ -646,7 +777,7 @@ export async function processSkryptCommand(message) {
         klient,
         briefLink: briefIsLinks ? briefLinks[0] : "Brief tekstowy (bez linku, opis + USP)",
         skryptLink: docUrl,
-        zabieg: zabiegi.join(" + "),
+        zabieg: zabiegLabel,
       });
     } catch (err) {
       console.error("Error creating script doc:", err);
