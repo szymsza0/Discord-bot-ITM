@@ -15,6 +15,12 @@
 export const PROBLEM_AWARE_SEED_KLIENT = "Wzór ITM";
 export const PROBLEM_AWARE_SEED_ZABIEG = "Usuwanie przebarwień / trądziku";
 export const PROBLEM_AWARE_HOOK_COUNT = 5;
+// Soft length guideline for the main reel (all 5 hooks + Kwestie + Promocja +
+// CTA, without the separate "Krotsza rolka"). Only the prompt asks for it;
+// the generator asks for one shortening pass when the result overshoots by
+// more than the tolerance, and otherwise accepts it as is.
+export const PROBLEM_AWARE_MAX_CHARS = 1600;
+export const PROBLEM_AWARE_SHORTEN_ABOVE_CHARS = 1900;
 
 export const PROBLEM_AWARE_REFERENCE_SCRIPT = `Hook 1:
 Kobieto z okolic Wrocławia w wieku 18 do 45 lat – Masz dosyć retuszowania zdjęć i chowania twarzy za filtrem, bo niedoskonałości nie dają Ci spokoju?
@@ -61,4 +67,5 @@ Zasady:
 4. Body (Kwestie): 1) empatia - "znam to uczucie / bylam w Twoim miejscu", nazwanie problemow; 2) jest sposob - wlasciwie dobrana technologia/zabieg + dowod (liczba klientek, lata praktyki, wlasna formula); 3) zasluga i emocja docelowa - wolnosc, pewnosc siebie.
 5. Promocja + CTA na koncu (konsultacja / formularz, limit np. "pierwszym 20 osobom w tym miesiacu" - tylko jesli wynika z briefu).
 6. Krotsza rolka: jeden akapit - hook z wiekiem i lokalizacja, "istnieje na to sposob", dowod, emocja, CTA + promocja.
-7. Mow jezykiem odbiorczyni, pierwsza osoba (ekspertka mowi do klientki), bez zargonu medycznego.`;
+7. DLUGOSC (miekka regula): cala rolka - ${PROBLEM_AWARE_HOOK_COUNT} hookow + Kwestie + Promocja + CTA (bez krotszej rolki) - ma miec lacznie do ok. ${PROBLEM_AWARE_MAX_CHARS} znakow. Orientacyjnie: kazdy hook ok. 100-140 znakow (jedno zdanie), Kwestie razem ok. 650-750 znakow (kazda 2-3 krotkie zdania), Promocja + CTA ok. 150-200 znakow. Mozna lekko przekroczyc, jesli to konieczne, ale celuj w limit - lepiej krocej i konkretniej.
+8. Mow jezykiem odbiorczyni, pierwsza osoba (ekspertka mowi do klientki), bez zargonu medycznego.`;

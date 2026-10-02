@@ -3,6 +3,8 @@ import { z } from "zod";
 import { ANTHROPIC_API_KEY } from "../config.js";
 import {
   PROBLEM_AWARE_HOOK_COUNT,
+  PROBLEM_AWARE_MAX_CHARS,
+  PROBLEM_AWARE_SHORTEN_ABOVE_CHARS,
   PROBLEM_AWARE_REFERENCE_SCRIPT,
   PROBLEM_AWARE_RULES,
 } from "./problemAwareTemplate.js";
@@ -33,6 +35,12 @@ export const SCRIPT_TYPES = {
 // Problem-aware variants carry 5 alternative hooks instead of hook + hook B.
 // rolka.hook is still filled (= hooks[0]) so downstream code that only knows
 // about a single hook keeps working.
+/** Character count of the main problem-aware reel (hooks + body + promo + CTA), without the short reel. */
+export function problemAwareRolkaLength(variant) {
+  const r = variant.rolka;
+  return [...r.hooks, ...r.body, r.promocja, r.cta].reduce((sum, t) => sum + t.length, 0);
+}
+
 export const ProblemAwareVariantSchema = z.object({
   variantLabel: z.string().min(1),
   rolka: z.object({
@@ -272,7 +280,7 @@ function buildUserPrompt({
         : "Grupa docelowa nie zostala podana wprost - ustal lokalizacje i przedzial wieku z briefu, a jesli ich brak, dobierz typowy przedzial wieku dla tego zabiegu."
     );
     parts.push(
-      "--- WZOR SKRYPTU PROBLEM AWARE (bazowa struktura, ton i rytm - przenies na ten zabieg i klienta, NIE kopiuj zdan 1:1) ---\n" +
+      "--- WZOR SKRYPTU PROBLEM AWARE (bazowa struktura, ton i rytm - przenies na ten zabieg i klienta, NIE kopiuj zdan 1:1; wzor jest nieco dluzszy niz limit dlugosci - Twoja wersja ma byc zwiezlejsza) ---\n" +
         PROBLEM_AWARE_REFERENCE_SCRIPT
     );
   }
@@ -392,7 +400,35 @@ export async function generateScriptVariant({
   }
 
   if (isProblemAware) {
-    const data = parsed.data;
+    let data = parsed.data;
+    const length = problemAwareRolkaLength(data);
+    if (length > PROBLEM_AWARE_SHORTEN_ABOVE_CHARS) {
+      // Soft limit: one shortening pass, and the shorter valid result wins.
+      // A failed/longer retry just keeps the original - never an error.
+      messages.push({ role: "assistant", content: response.content });
+      messages.push({
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: toolUse.id,
+            is_error: true,
+            content:
+              `Rolka (${PROBLEM_AWARE_HOOK_COUNT} hookow + Kwestie + Promocja + CTA) ma ${length} znakow, a wytyczna to ok. ${PROBLEM_AWARE_MAX_CHARS}. ` +
+              `Skroc ja do ok. ${PROBLEM_AWARE_MAX_CHARS} znakow: krotsze hooki (jedno zdanie), zwiezlejsze Kwestie, bez powtorzen - zachowaj kat, grupe docelowa (miasto + wiek) i strukture. ` +
+              `Wywolaj ${toolName} ponownie z pelnym, skroconym wariantem.`,
+          },
+        ],
+      });
+      try {
+        const shortened = extractAndValidate(await anthropic.messages.create({ ...baseParams, messages }), schema);
+        if (shortened.parsed.success && problemAwareRolkaLength(shortened.parsed.data) < length) {
+          data = shortened.parsed.data;
+        }
+      } catch (err) {
+        console.warn("Skracanie skryptu problem aware nie powiodlo sie, zostawiam oryginal:", err.message);
+      }
+    }
     return { ...data, scriptType, rolka: { ...data.rolka, hook: data.rolka.hooks[0] } };
   }
   return { ...parsed.data, scriptType };
