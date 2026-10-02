@@ -21,6 +21,7 @@ import {
   buildScriptDocContent,
   createFormattedScriptDoc,
   moveDocToFolder,
+  googleErrorMessage,
 } from "../utils/googleDocs.js";
 import {
   generateScriptVariant,
@@ -217,6 +218,50 @@ async function askVariantCount(message) {
       .edit({ content: `⌛ Czas minął — użyto wartości domyślnej (${DEFAULT_VARIANTS}).`, components: [] })
       .catch(() => {});
     return DEFAULT_VARIANTS;
+  }
+}
+
+const RETRY = "retry";
+const NEW_INPUT = "new_input";
+const CANCEL = "cancel";
+
+/**
+ * Shown after a failed step so the operator doesn't have to restart the whole
+ * !skrypt conversation: retry the same step, (optionally) provide different
+ * input for it, or cancel. Resolves to RETRY / NEW_INPUT / CANCEL; a timeout
+ * counts as CANCEL.
+ */
+async function askRetry(message, errorText, { newInputLabel = null } = {}) {
+  const stamp = Date.now();
+  const buttons = [
+    new ButtonBuilder().setCustomId(`skrypt_retry_${RETRY}_${stamp}`).setLabel("🔁 Spróbuj ponownie").setStyle(ButtonStyle.Primary),
+  ];
+  if (newInputLabel) {
+    buttons.push(
+      new ButtonBuilder().setCustomId(`skrypt_retry_${NEW_INPUT}_${stamp}`).setLabel(newInputLabel).setStyle(ButtonStyle.Secondary)
+    );
+  }
+  buttons.push(
+    new ButtonBuilder().setCustomId(`skrypt_retry_${CANCEL}_${stamp}`).setLabel("Anuluj").setStyle(ButtonStyle.Danger)
+  );
+
+  const promptMessage = await message.channel.send({
+    embeds: [errorEmbed(errorText.slice(0, 3900))],
+    components: [new ActionRowBuilder().addComponents(buttons)],
+  });
+  const filter = (interaction) =>
+    interaction.user.id === message.author.id && interaction.customId.endsWith(`_${stamp}`);
+
+  try {
+    const interaction = await promptMessage.awaitMessageComponent({ filter, time: COMPONENT_TIMEOUT_MS });
+    const choice = [RETRY, NEW_INPUT, CANCEL].find((c) => interaction.customId.includes(`_${c}_`));
+    await interaction.update({ components: [] });
+    if (choice === CANCEL) await message.channel.send({ embeds: [infoEmbed("Anulowano. Zacznij od nowa: `!skrypt`.")] });
+    return choice;
+  } catch {
+    await promptMessage.edit({ components: [] }).catch(() => {});
+    await message.channel.send({ embeds: [infoEmbed("⌛ Czas minął. Zacznij od nowa: `!skrypt`.")] });
+    return CANCEL;
   }
 }
 
@@ -665,15 +710,16 @@ export async function processSkryptCommand(message) {
       ],
     });
 
-    const processingMsg = await message.channel.send({
+    let processingMsg = await message.channel.send({
       embeds: [infoEmbed("⏳ Przetwarzanie: pobieram brief i przykład...")],
     });
 
-    if (briefIsLinks) {
+    let briefLinksToFetch = briefIsLinks ? briefLinks : [];
+    while (briefsText === null) {
       try {
         const briefTexts = await Promise.all(
           zabiegi.map(async (zabieg, i) => {
-            const link = briefLinks[i] || briefLinks[0];
+            const link = briefLinksToFetch[i] || briefLinksToFetch[0];
             const text = await fetchDocTextCached(link);
             return `Zabieg: ${zabieg}\nBrief:\n${text}`;
           })
@@ -681,7 +727,28 @@ export async function processSkryptCommand(message) {
         briefsText = briefTexts.join("\n\n---\n\n");
       } catch (err) {
         console.error("Error fetching brief docs:", err);
-        return processingMsg.edit({ embeds: [errorEmbed(`Nie udało się pobrać treści briefu: ${err.message}`)] });
+        await processingMsg.delete().catch(() => {});
+        const choice = await askRetry(
+          message,
+          `Nie udało się pobrać treści briefu: ${googleErrorMessage(err)}\n\n` +
+            "Sprawdź, czy bot ma dostęp do pliku, i spróbuj ponownie - albo podaj inny link / wklej opis zabiegu i USP.",
+          { newInputLabel: "✏️ Inny link lub opis" }
+        );
+        if (choice === CANCEL) return;
+        if (choice === NEW_INPUT) {
+          const newInput = await askText(
+            message,
+            "Wklej nowy link(i) do briefu (po przecinku) albo opis zabiegu i USP:"
+          );
+          if (!newInput) return;
+          if (looksLikeLinkList(newInput)) {
+            briefLinksToFetch = newInput.split(",").map((x) => x.trim()).filter(Boolean);
+          } else {
+            briefsText = `Opis zabiegu / USP (podany bezpośrednio, bez linku do briefu):\n${newInput}\n\n---\n\n${FIXED_CTA_NOTE}`;
+            briefLinksToFetch = [];
+          }
+        }
+        processingMsg = await message.channel.send({ embeds: [infoEmbed("⏳ Ponawiam: pobieram brief...")] });
       }
     }
 
@@ -725,65 +792,85 @@ export async function processSkryptCommand(message) {
     const variants = [];
     const previousVariantSummaries = [];
 
-    for (let i = 1; i <= warianty; i++) {
-      await processingMsg.edit({ embeds: [infoEmbed(`⏳ Generuję wariant ${i}/${warianty}...`)] });
+    // Re-entered only via the retry button below (when no variant came out).
+    for (;;) {
+      for (let i = variants.length + 1; i <= warianty; i++) {
+        await processingMsg.edit({ embeds: [infoEmbed(`⏳ Generuję wariant ${i}/${warianty}...`)] });
 
-      try {
-        const variant = await generateScriptVariant({
-          templateRulesText: template.rulesText,
-          briefsText,
-          referenceScriptText,
-          zabiegi,
-          klient,
-          variantIndex: i,
-          totalVariants: warianty,
-          previousVariantSummaries,
-          scriptType,
-          grupaDocelowa,
-        });
-        variants.push(variant);
-        const hooksSummary = variant.rolka.hooks
-          ? `hooki: ${variant.rolka.hooks.map((h) => `"${h}"`).join(" | ")}`
-          : `hook: "${variant.rolka.hook}"`;
-        previousVariantSummaries.push(`${variant.variantLabel} - ${hooksSummary}`);
-      } catch (err) {
-        if (err instanceof ScriptGenerationError) {
-          await message.channel.send({
-            embeds: [errorEmbed(`Wariant ${i}: ${err.message}\n\nSzczegóły: ${err.details}`)],
+        try {
+          const variant = await generateScriptVariant({
+            templateRulesText: template.rulesText,
+            briefsText,
+            referenceScriptText,
+            zabiegi,
+            klient,
+            variantIndex: i,
+            totalVariants: warianty,
+            previousVariantSummaries,
+            scriptType,
+            grupaDocelowa,
           });
-          continue;
+          variants.push(variant);
+          const hooksSummary = variant.rolka.hooks
+            ? `hooki: ${variant.rolka.hooks.map((h) => `"${h}"`).join(" | ")}`
+            : `hook: "${variant.rolka.hook}"`;
+          previousVariantSummaries.push(`${variant.variantLabel} - ${hooksSummary}`);
+        } catch (err) {
+          // Any failure (schema or API, e.g. overload) only skips this variant;
+          // if none succeed, the operator gets a retry button below.
+          console.error(`Error generating variant ${i}:`, err);
+          const details = err instanceof ScriptGenerationError ? `\n\nSzczegóły: ${err.details}` : "";
+          await message.channel.send({ embeds: [errorEmbed(`Wariant ${i}: ${err.message}${details}`)] });
         }
-        throw err;
       }
-    }
 
-    if (variants.length === 0) {
-      return processingMsg.edit({ embeds: [errorEmbed("Nie udało się wygenerować żadnego wariantu skryptu.")] });
+      if (variants.length > 0) break;
+      await processingMsg.delete().catch(() => {});
+      const choice = await askRetry(message, "Nie udało się wygenerować żadnego wariantu skryptu.");
+      if (choice !== RETRY) return;
+      processingMsg = await message.channel.send({ embeds: [infoEmbed("⏳ Ponawiam generowanie...")] });
     }
 
     // All variants from this one request go into a single doc/sheet row, not
     // one per variant, so one !skrypt call always yields exactly one link.
     const zabiegLabel = isProblemAware ? tagProblemAware(zabiegi.join(" + ")) : zabiegi.join(" + ");
     const docTitle = `${klient} - ${zabiegLabel} - skrypty i wskazówki | ITM`;
+    // Each save step is remembered, so a retry after e.g. a failed sheet
+    // append doesn't create a second copy of the doc.
+    let docId = null;
+    let movedToFolder = false;
     let docUrl;
-    try {
-      const { text, spans } = buildScriptDocContent(docTitle, variants, template.recordingInstructionsText);
-      const docId = await createFormattedScriptDoc(docTitle, text, spans);
-      await moveDocToFolder(docId, GOOGLE_SCRIPTS_DRIVE_FOLDER_ID);
-      docUrl = `https://docs.google.com/document/d/${docId}/edit`;
+    for (;;) {
+      try {
+        if (!docId) {
+          const { text, spans } = buildScriptDocContent(docTitle, variants, template.recordingInstructionsText);
+          docId = await createFormattedScriptDoc(docTitle, text, spans);
+        }
+        docUrl = `https://docs.google.com/document/d/${docId}/edit`;
+        if (!movedToFolder) {
+          await moveDocToFolder(docId, GOOGLE_SCRIPTS_DRIVE_FOLDER_ID);
+          movedToFolder = true;
+        }
 
-      await appendScriptRow(GOOGLE_SCRIPTS_SHEET_ID, {
-        czyj: message.member?.displayName || message.author.username,
-        klient,
-        briefLink: briefIsLinks ? briefLinks[0] : "Brief tekstowy (bez linku, opis + USP)",
-        skryptLink: docUrl,
-        zabieg: zabiegLabel,
-      });
-    } catch (err) {
-      console.error("Error creating script doc:", err);
-      return processingMsg.edit({
-        embeds: [errorEmbed(`Skrypty wygenerowane, ale nie udało się zapisać dokumentu/arkusza: ${err.message}`)],
-      });
+        await appendScriptRow(GOOGLE_SCRIPTS_SHEET_ID, {
+          czyj: message.member?.displayName || message.author.username,
+          klient,
+          briefLink: briefLinksToFetch[0] || "Brief tekstowy (bez linku, opis + USP)",
+          skryptLink: docUrl,
+          zabieg: zabiegLabel,
+        });
+        break;
+      } catch (err) {
+        console.error("Error creating script doc:", err);
+        await processingMsg.delete().catch(() => {});
+        const choice = await askRetry(
+          message,
+          `Skrypty wygenerowane, ale nie udało się zapisać dokumentu/arkusza: ${googleErrorMessage(err)}` +
+            (docId ? `\n\nDokument już istnieje: ${docUrl}` : "")
+        );
+        if (choice !== RETRY) return;
+        processingMsg = await message.channel.send({ embeds: [infoEmbed("⏳ Ponawiam zapis...")] });
+      }
     }
 
     await processingMsg.edit({

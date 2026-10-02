@@ -13,11 +13,70 @@ import { getDocsClient, getDriveClient } from "./googleAuth.js";
  */
 export async function fetchDocPlainText(docId) {
   const drive = getDriveClient();
-  const response = await drive.files.export(
-    { fileId: docId, mimeType: "text/plain" },
-    { responseType: "text" }
-  );
-  return typeof response.data === "string" ? response.data : String(response.data);
+  try {
+    const response = await drive.files.export(
+      { fileId: docId, mimeType: "text/plain" },
+      { responseType: "text" }
+    );
+    return typeof response.data === "string" ? response.data : String(response.data);
+  } catch (err) {
+    if (!isNotExportableError(err)) throw err;
+    return fetchNonNativeFileText(docId);
+  }
+}
+
+const GOOGLE_DOC_MIME = "application/vnd.google-apps.document";
+
+function isNotExportableError(err) {
+  const reasons = (err?.errors || err?.response?.data?.error?.errors || []).map((e) => e.reason);
+  return reasons.includes("fileNotExportable") || /Export only supports Docs Editors files/i.test(err?.message || "");
+}
+
+/**
+ * Fallback for briefs uploaded to Drive as regular files (.docx, .pdf, .txt,
+ * ...) rather than native Google Docs - Drive's export only works on the
+ * latter. Plain-text files are downloaded as-is; anything else is copied
+ * into a temporary Google Doc (Drive converts it), exported, and the
+ * temporary copy is removed again.
+ */
+async function fetchNonNativeFileText(fileId) {
+  const drive = getDriveClient();
+  const meta = await drive.files.get({ fileId, fields: "name, mimeType", supportsAllDrives: true });
+  const { name, mimeType } = meta.data;
+
+  if (/^text\//.test(mimeType || "")) {
+    const res = await drive.files.get({ fileId, alt: "media", supportsAllDrives: true }, { responseType: "text" });
+    return typeof res.data === "string" ? res.data : String(res.data);
+  }
+
+  let copyId;
+  try {
+    const copy = await drive.files.copy({
+      fileId,
+      supportsAllDrives: true,
+      requestBody: { name: `[tmp bot] ${name || fileId}`, mimeType: GOOGLE_DOC_MIME },
+      fields: "id",
+    });
+    copyId = copy.data.id;
+  } catch (err) {
+    throw new Error(
+      `Plik "${name || fileId}" (${mimeType || "nieznany typ"}) nie jest dokumentem Google i nie da się go przekonwertować: ${googleErrorMessage(err)}`
+    );
+  }
+
+  try {
+    const res = await drive.files.export({ fileId: copyId, mimeType: "text/plain" }, { responseType: "text" });
+    return typeof res.data === "string" ? res.data : String(res.data);
+  } finally {
+    await drive.files.delete({ fileId: copyId, supportsAllDrives: true }).catch((err) => {
+      console.warn(`Nie udało się usunąć tymczasowej kopii ${copyId}:`, err.message);
+    });
+  }
+}
+
+/** Short, human-readable message from a googleapis error (instead of the raw JSON body). */
+export function googleErrorMessage(err) {
+  return err?.errors?.[0]?.message || err?.response?.data?.error?.message || err?.message || String(err);
 }
 
 function extractParagraphText(paragraph) {
