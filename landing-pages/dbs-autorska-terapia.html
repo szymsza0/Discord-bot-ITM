@@ -1,0 +1,562 @@
+<!-- wp:html -->
+<!--
+  LP: Diamond Beauty & SPA - autorski 2-etapowy Program Metamorfozy Sylwetki
+  Slug: dbs-autorska-terapia
+  Oferta wg reklam Meta (act_691941935380617, kampania "Lead Ads" / "Kampania 2 etapy", wrzesień 2026):
+  10 spotkań x 80 min, 1500 zł zamiast 3400 zł, gratis: sauna karbonowa lub RF / liposukcja kawitacyjna.
+  DO PODMIANY przed publikacją: formularz CF7 (2x), zdjęcia przed/po, opinie (szukaj "PODMIEŃ").
+-->
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+  /* Paleta Diamond Beauty & SPA: grafit + złoto (jak kreacje reklam) */
+  :root{
+    --zl-cream:#FAF7F2; --zl-cream-2:#F2ECE2; --zl-card:#FFFFFF;
+    --zl-ink:#1E1C1A; --zl-ink-soft:#5C554D;
+    --zl-mauve:#7D5E14; --zl-mauve-deep:#C9A13B; --zl-mauve-dark:#262422;
+    --zl-beige:#E6DCC9; --zl-beige-soft:#F5EFE3;
+    --zl-gold-1:#F2D27A; --zl-gold-2:#C9A13B;
+    --zl-sale:#B3362A; --zl-save:#7D5E14;
+    --zl-field-border:#8C8273; --zl-field-ph:#6B6258;
+    --zl-radius:18px; --zl-shadow:0 8px 30px rgba(38,36,34,.08); --zl-shadow-hover:0 16px 44px rgba(38,36,34,.16); --zl-max:1120px;
+  }
+  html{scroll-behavior:smooth}
+  .zl-page{font-family:'Inter',system-ui,sans-serif;background:var(--zl-cream);color:var(--zl-ink);line-height:1.65;font-size:18.5px}
+  .zl-page *{margin:0;padding:0;box-sizing:border-box}
+  .zl-page h1,.zl-page h2,.zl-page h3,.zl-serif{font-family:'Cormorant Garamond',serif;line-height:1.18;color:var(--zl-ink)}
+  .zl-page{font-variant-numeric:lining-nums}
+  .zl-page h2{font-size:clamp(30px,4.2vw,44px);font-weight:600}
+  .zl-page h3{font-size:23px;font-weight:600}
+  .zl-page img{max-width:100%;display:block;border:none}
+  .zl-page a{color:inherit}
+  .zl-wrap{max-width:var(--zl-max);margin:0 auto;padding:0 22px}
+  .zl-page section{padding:76px 0}
+  .zl-page section[id],.zl-page header[id]{scroll-margin-top:88px}
+  .zl-center{text-align:center}
+  .zl-sub{color:var(--zl-ink-soft);max-width:720px;margin:14px auto 0;font-size:18px}
+  .zl-eyebrow{display:inline-block;font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--zl-mauve);font-weight:600;margin-bottom:14px}
+  .zl-divider{width:56px;height:3px;background:linear-gradient(90deg,var(--zl-gold-1),var(--zl-gold-2));margin:0 auto 18px;border-radius:2px}
+  .zl-page button, .zl-page .zl-btn{text-transform:none !important;letter-spacing:normal !important}
+  .zl-page ul{list-style:none}
+  body{overflow-x:hidden}
+  .entry-content,.content-container,.site-container,article.entry,.single-content,.content-wrap{max-width:none !important;padding-left:0 !important;padding-right:0 !important;margin-left:0 !important;margin-right:0 !important}
+  .zl-page{width:100vw;position:relative;left:50%;margin-left:-50vw}
+  #masthead,.site-header,#wrapnav,.site-main-header-wrap{display:none !important}
+  .entry-header,.site-hero,#inner-wrap .entry-title,.page-title,.kadence-breadcrumbs,
+  .entry-hero,.entry-hero-container,.kadence-title-above,.titles-wrapper,.page-hero,header.entry-header,.kb-hero,
+  .entry-hero-layout-standard,.wp-block-kadence-header,.kadence-hero-section,.entry-header-wrap,.above-title-content{display:none !important;height:0 !important;min-height:0 !important;padding:0 !important;margin:0 !important;border:0 !important}
+  .content-area,#primary,#main,.site-main,.entry-content-wrap,.single-content,.content-container,.hentry{padding-top:0 !important;margin-top:0 !important}
+  /* Przycisk: złota pigułka z ciemnym tekstem */
+  .zl-btn{display:inline-block;background:linear-gradient(135deg,var(--zl-gold-1) 0%,var(--zl-gold-2) 100%);color:var(--zl-ink) !important;text-decoration:none !important;padding:16px 32px;border-radius:999px;font-weight:700;font-size:16px;border:none;cursor:pointer;box-shadow:0 6px 18px rgba(201,161,59,.30);transition:transform .22s ease, box-shadow .22s ease, filter .22s ease}
+  .zl-btn:hover,.zl-btn:focus,.zl-btn:active{transform:translateY(-3px) scale(1.02);box-shadow:var(--zl-shadow-hover);filter:brightness(1.06);color:var(--zl-ink) !important}
+  .zl-cta-row{margin-top:30px}
+  /* NAV */
+  .zl-nav{position:sticky;top:0;z-index:50;background:rgba(250,247,242,.92);backdrop-filter:blur(8px);border-bottom:1px solid rgba(38,36,34,.08)}
+  .zl-nav__in{display:flex;align-items:center;justify-content:space-between;padding:14px 22px;max-width:var(--zl-max);margin:0 auto;gap:12px}
+  .zl-logo{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:22px;letter-spacing:.12em;text-transform:uppercase;text-decoration:none !important;line-height:1.15;color:var(--zl-ink);min-width:0}
+  .zl-logo span{display:block;font-family:'Inter';font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--zl-mauve);font-weight:600}
+  .zl-nav__links{display:flex;gap:26px;align-items:center;list-style:none;margin:0;flex:none}
+  .zl-nav__links a{text-decoration:none !important;font-size:15px;font-weight:500;color:var(--zl-ink-soft);transition:color .2s}
+  .zl-nav__links a:hover{color:var(--zl-mauve)}
+  .zl-nav .zl-btn{padding:11px 20px;font-size:14.5px;white-space:nowrap;flex:none}
+  @media(max-width:900px){.zl-nav__links li:not(.zl-nav__cta){display:none}}
+  @media(max-width:560px){
+    .zl-nav__in{padding:12px 15px}
+    .zl-nav .zl-btn{padding:10px 13px;font-size:12.5px}
+    .zl-logo{font-size:17px;letter-spacing:.08em}
+    .zl-logo span{font-size:9px;letter-spacing:.1em}
+  }
+  /* HERO */
+  .zl-hero{padding:64px 0 78px;background:linear-gradient(180deg,var(--zl-cream) 0%,var(--zl-cream-2) 100%)}
+  .zl-hero__grid{display:grid;grid-template-columns:1.05fr 0.95fr;gap:56px;align-items:center}
+  @media(max-width:900px){.zl-hero__grid{grid-template-columns:1fr;gap:34px}}
+  .zl-hero h1{font-size:clamp(34px,4.7vw,54px);font-weight:600;margin:14px 0 16px}
+  .zl-hero h1 em{display:block;margin-top:12px;font-style:italic;font-size:.62em;color:var(--zl-mauve)}
+  .zl-hero__badge{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--zl-beige);border-radius:999px;padding:8px 16px;font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--zl-ink-soft);font-weight:600}
+  .zl-hero__badge b{color:var(--zl-mauve)}
+  .zl-limited{display:block;margin:10px 0 0;color:var(--zl-sale);font-weight:800;font-size:14px;letter-spacing:.02em}
+  .zl-hero p.lead{font-size:19.5px;color:var(--zl-ink-soft)}
+  .zl-hero__note{margin:18px 0 22px;background:var(--zl-beige-soft);border-left:4px solid var(--zl-mauve-deep);padding:14px 18px;border-radius:10px;font-size:16px;color:var(--zl-ink-soft)}
+  .zl-exchange{display:flex;align-items:center;gap:14px;background:var(--zl-mauve-dark);color:#fff;border-radius:16px;padding:14px 20px;margin:18px 0 22px;font-size:15.5px;line-height:1.45}
+  .zl-exchange .ico{flex:none;width:38px;height:38px;border-radius:50%;background:#fff;color:var(--zl-ink);display:flex;align-items:center;justify-content:center;font-size:18px}
+  .zl-exchange b{color:var(--zl-gold-1)}
+  @media(max-width:900px){.zl-hero__media{order:-1;margin:0 auto;width:100%}}
+  /* HERO - karta oferty zamiast zdjęcia */
+  .zl-offer-visual{position:relative;max-width:440px;margin:0 auto;background:radial-gradient(120% 90% at 85% 0%,#3A3631 0%,var(--zl-mauve-dark) 55%,#171513 100%);color:#fff;border-radius:24px;padding:38px 32px 32px;box-shadow:var(--zl-shadow-hover);overflow:hidden;text-align:center}
+  .zl-offer-visual::before{content:"";position:absolute;inset:10px;border:1px solid rgba(242,210,122,.28);border-radius:18px;pointer-events:none}
+  .zl-offer-visual__brand{font-size:11.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--zl-gold-1);font-weight:700}
+  .zl-offer-visual__gem{font-size:30px;color:var(--zl-gold-1);margin:14px 0 4px;line-height:1}
+  .zl-offer-visual__title{font-family:'Cormorant Garamond',serif;font-size:31px;font-weight:600;line-height:1.15;color:#fff}
+  .zl-offer-visual__stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:22px 0}
+  .zl-offer-visual__stats div{background:rgba(255,255,255,.06);border:1px solid rgba(242,210,122,.22);border-radius:14px;padding:14px 8px}
+  .zl-offer-visual__stats strong{display:block;font-family:'Cormorant Garamond',serif;font-size:40px;line-height:1;color:var(--zl-gold-1);font-weight:700}
+  .zl-offer-visual__stats span{display:block;margin-top:6px;font-size:13px;color:rgba(255,255,255,.82)}
+  .zl-offer-visual__old{display:block;font-size:15px;color:rgba(255,255,255,.75)}
+  .zl-offer-visual__old s{color:#F1A99E;font-weight:800;font-size:22px;text-decoration-thickness:2px}
+  .zl-offer-visual__new{display:block;font-family:'Cormorant Garamond',serif;font-size:58px;line-height:1.05;font-weight:700;color:var(--zl-gold-1)}
+  .zl-offer-visual__save{display:inline-block;margin-top:10px;background:linear-gradient(135deg,var(--zl-gold-1),var(--zl-gold-2));color:var(--zl-ink);border-radius:999px;padding:7px 16px;font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+  .zl-offer-visual__gift{margin-top:18px;font-size:14px;color:rgba(255,255,255,.85);line-height:1.5}
+  .zl-offer-visual__gift b{color:var(--zl-gold-1)}
+  /* TRUST STRIP */
+  .zl-trust{background:var(--zl-mauve-dark);color:#fff;padding:26px 0}
+  .zl-trust__grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;text-align:center}
+  .zl-trust strong{display:block;font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:var(--zl-gold-1)}
+  .zl-trust span{display:block;margin-top:2px;font-size:14px;color:rgba(255,255,255,.8)}
+  @media(max-width:640px){.zl-trust__grid{grid-template-columns:1fr;gap:12px}}
+  /* CARDS + CAROUSEL */
+  .zl-card{background:var(--zl-card);border-radius:var(--zl-radius);padding:28px;box-shadow:var(--zl-shadow);transition:transform .25s ease, box-shadow .25s ease}
+  .zl-card:hover{transform:translateY(-5px);box-shadow:var(--zl-shadow-hover)}
+  .zl-carousel{position:relative;margin-top:40px}
+  .zl-track{display:flex;gap:22px;overflow-x:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;align-items:flex-start;padding:4px 2px 12px;scrollbar-width:thin}
+  .zl-track.zl-snap{scroll-snap-type:x mandatory}
+  .zl-track::-webkit-scrollbar{height:8px}
+  .zl-track::-webkit-scrollbar-track{background:transparent}
+  .zl-track::-webkit-scrollbar-thumb{background:rgba(38,36,34,.22);border-radius:8px}
+  .zl-slide{flex:0 0 calc((100% - 44px)/3);scroll-snap-align:start}
+  @media(max-width:900px){.zl-slide{flex-basis:calc((100% - 22px)/2)}}
+  @media(max-width:560px){.zl-slide{flex-basis:100%}}
+  .zl-slide img{width:100%;height:360px;object-fit:contain;background:#fff;border-radius:16px;box-shadow:var(--zl-shadow);transition:transform .25s ease, box-shadow .25s ease}
+  @media(max-width:900px){.zl-slide img{height:320px}}
+  @media(max-width:560px){.zl-slide img{height:360px}}
+  .zl-slide img:hover{transform:scale(1.02);box-shadow:var(--zl-shadow-hover)}
+  .zl-slide b{display:block;margin-top:12px;text-align:center;color:var(--zl-mauve);font-size:14px;letter-spacing:.08em}
+  .zl-arrow{position:absolute;top:42%;transform:translateY(-50%);z-index:5;width:46px;height:46px;border-radius:50%;background:var(--zl-mauve-dark);color:#fff;border:none;cursor:pointer;font-size:24px;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:var(--zl-shadow);transition:transform .2s ease, background .2s ease}
+  .zl-arrow:hover,.zl-arrow:focus{background:var(--zl-mauve-deep);transform:translateY(-50%) scale(1.06)}
+  .zl-arrow--prev{left:-10px}
+  .zl-arrow--next{right:-10px}
+  @media(max-width:560px){.zl-arrow{width:40px;height:40px;font-size:20px}.zl-arrow--prev{left:2px}.zl-arrow--next{right:2px}}
+  /* TO DLA CIEBIE */
+  .zl-fit__grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:36px;text-align:left}
+  @media(max-width:700px){.zl-fit__grid{grid-template-columns:1fr}}
+  .zl-fit__item{position:relative;padding:18px 18px 18px 46px;background:var(--zl-card);border:1px solid rgba(38,36,34,.08);border-radius:14px;box-shadow:var(--zl-shadow);font-size:16px;color:var(--zl-ink-soft)}
+  .zl-fit__item::before{content:"\2713";position:absolute;left:15px;top:17px;width:22px;height:22px;border-radius:50%;background:var(--zl-beige-soft);color:var(--zl-mauve);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800}
+  /* OFERTA */
+  .zl-count-mini{display:inline-flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--zl-beige);border-radius:999px;padding:10px 22px;box-shadow:var(--zl-shadow);margin-top:18px}
+  .zl-count-mini .lbl{font-size:13.5px;color:var(--zl-ink-soft);font-weight:600}
+  .zl-count-mini .time{font-family:'Inter',sans-serif;font-weight:700;font-size:22px;color:var(--zl-mauve);font-variant-numeric:tabular-nums;letter-spacing:.02em}
+  .zl-two{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start;margin-top:30px;text-align:left}
+  @media(max-width:900px){.zl-two{grid-template-columns:1fr}}
+  @media(min-width:901px){.zl-two>.zl-card{position:sticky;top:100px}}
+  .zl-offer-checks{list-style:none;margin:10px 0 0}
+  .zl-offer-checks li{display:flex;align-items:baseline;gap:10px;font-size:15.5px;color:var(--zl-ink);padding:10px 0;border-bottom:1px solid rgba(38,36,34,.06)}
+  .zl-offer-checks li::before{content:"\2713";color:var(--zl-mauve);font-weight:700;flex:none}
+  .zl-bonus{margin:16px 0 0;background:var(--zl-beige-soft);border:1px solid var(--zl-beige);border-radius:14px;padding:16px 20px;font-size:15px;color:var(--zl-ink-soft)}
+  .zl-bonus b{color:var(--zl-mauve)}
+  .zl-price{margin-top:20px}
+  .zl-price .old{display:block;color:var(--zl-ink-soft);font-weight:600;font-size:15px;margin-bottom:4px}
+  .zl-price .old s{color:var(--zl-sale);font-weight:800;font-size:27px;text-decoration-thickness:2px}
+  .zl-price .new{display:block;font-family:'Cormorant Garamond',serif;font-size:44px;font-weight:700;color:var(--zl-save);margin-top:2px}
+  .zl-price .promo{display:block;margin-top:12px;color:var(--zl-mauve);font-weight:700;font-size:15px}
+  /* FORM BOX + SZKIELET CF7 (pola: białe tło, ramka min. 3:1, placeholder min. 4.5:1) */
+  .zl-form-box{background:var(--zl-card);border-radius:var(--zl-radius);box-shadow:var(--zl-shadow-hover);padding:26px}
+  .zl-form-box>h3{color:var(--zl-ink);text-align:center;margin-bottom:6px}
+  .zl-form-box>p{color:var(--zl-ink-soft);text-align:center;font-size:14px;margin-bottom:14px}
+  .zl-form-box .wpcf7{max-width:none}
+  .zl-form-box .wpcf7-form p{margin:0 0 16px}
+  .zl-form-box .wpcf7-form label{display:block;font-weight:600;color:var(--zl-ink);font-size:.92rem}
+  .zl-form-box .wpcf7-form label .wpcf7-form-control-wrap{display:block;margin-top:8px}
+  .zl-form-box .wpcf7-form input[type=text],
+  .zl-form-box .wpcf7-form input[type=email],
+  .zl-form-box .wpcf7-form input[type=tel],
+  .zl-form-box .wpcf7-form input[type=date],
+  .zl-form-box .wpcf7-form input[type=number],
+  .zl-form-box .wpcf7-form select,
+  .zl-form-box .wpcf7-form textarea{
+    width:100%;background:#fff;border:1.5px solid var(--zl-field-border);color:var(--zl-ink);
+    font-family:'Inter',sans-serif;font-size:1rem;padding:14px 18px;border-radius:12px;box-sizing:border-box;
+    transition:border-color .25s ease,box-shadow .25s ease}
+  .zl-form-box .wpcf7-form textarea{min-height:120px;resize:vertical}
+  .zl-form-box .wpcf7-form select,
+  .zl-form-box .wpcf7-form select option{color:var(--zl-ink)}
+  .zl-form-box .wpcf7-form input::placeholder,
+  .zl-form-box .wpcf7-form textarea::placeholder{color:var(--zl-field-ph);opacity:1}
+  .zl-form-box .wpcf7-form input:focus,
+  .zl-form-box .wpcf7-form select:focus,
+  .zl-form-box .wpcf7-form textarea:focus{outline:none;background:#fff;border-color:var(--zl-ink);box-shadow:0 0 0 3px rgba(201,161,59,.35)}
+  .zl-form-box .wpcf7-form .zl-consent,
+  .zl-form-box .wpcf7-form label.zl-consent{font-weight:400;font-size:.82rem;color:var(--zl-ink-soft);line-height:1.5}
+  .zl-form-box .wpcf7-form input[type=checkbox]{width:auto;margin-right:10px;accent-color:var(--zl-mauve);transform:scale(1.15);cursor:pointer}
+  .zl-form-box .wpcf7-form input[type=submit]{
+    width:100%;background:linear-gradient(135deg,var(--zl-gold-1) 0%,var(--zl-gold-2) 100%);color:var(--zl-ink);font-family:'Inter',sans-serif;font-weight:700;font-size:1.05rem;
+    padding:16px 32px;border:none;border-radius:999px;cursor:pointer;box-shadow:0 6px 18px rgba(201,161,59,.30);-webkit-appearance:none;
+    transition:transform .22s ease,box-shadow .22s ease,filter .22s ease}
+  .zl-form-box .wpcf7-form input[type=submit]:hover{filter:brightness(1.06);transform:translateY(-3px) scale(1.02);box-shadow:var(--zl-shadow-hover)}
+  .zl-form-box .wpcf7-form .wpcf7-spinner{margin:8px auto 0;display:block}
+  .zl-form-box .wpcf7-not-valid-tip{color:#B3362A;font-size:.8rem;font-weight:600;margin-top:6px}
+  .zl-form-box .wpcf7-response-output{border-radius:10px;border-color:var(--zl-beige) !important;font-size:14px;color:var(--zl-ink);margin:12px 0 0;padding:12px 16px}
+  /* DLACZEGO MY */
+  .zl-why__grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:40px}
+  @media(max-width:900px){.zl-why__grid{grid-template-columns:1fr 1fr}}
+  @media(max-width:560px){.zl-why__grid{grid-template-columns:1fr}}
+  .zl-why .ico{width:52px;height:52px;border-radius:50%;background:var(--zl-beige-soft);color:var(--zl-mauve);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;margin:0 auto 16px}
+  .zl-why h3{font-size:20px;margin-bottom:8px}
+  .zl-why p{color:var(--zl-ink-soft);font-size:16px}
+  /* JAK DZIALA */
+  .zl-how__grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start;margin-top:38px;text-align:left}
+  @media(max-width:850px){.zl-how__grid{grid-template-columns:1fr;gap:26px}}
+  .zl-how__step{display:grid;grid-template-columns:44px 1fr;gap:14px;padding:18px;background:var(--zl-card);border-radius:14px;box-shadow:var(--zl-shadow);margin-bottom:12px}
+  .zl-how__num{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--zl-gold-1),var(--zl-gold-2));color:var(--zl-ink);display:flex;align-items:center;justify-content:center;font-weight:700}
+  .zl-how__step h3{font-size:19px;margin-bottom:2px}
+  .zl-how__step p{font-size:15.5px;color:var(--zl-ink-soft)}
+  .zl-myth{padding:16px 18px;background:var(--zl-card);border-radius:14px;box-shadow:var(--zl-shadow);margin-top:12px}
+  .zl-myth b{display:block;font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--zl-ink)}
+  .zl-myth span{display:block;margin-top:4px;font-size:15.5px;color:var(--zl-ink-soft)}
+  .zl-myth b::before{content:"Mit: ";color:var(--zl-sale)}
+  /* OPINIE */
+  .zl-op-slide{flex:0 0 calc((100% - 22px)/2);scroll-snap-align:start;display:flex;flex-direction:column;justify-content:center}
+  @media(max-width:760px){.zl-op-slide{flex-basis:100%}}
+  .zl-op-slide img{width:100%;height:auto;aspect-ratio:auto;object-fit:initial;background:#fff;border-radius:16px;box-shadow:var(--zl-shadow);transition:transform .25s ease, box-shadow .25s ease}
+  .zl-op-slide img:hover{transform:scale(1.02);box-shadow:var(--zl-shadow-hover)}
+  #opinie-carousel .zl-track{align-items:center}
+  /* PLACEHOLDERY (do podmiany) */
+  .zl-ph-form{border:2px dashed var(--zl-mauve);border-radius:14px;padding:26px 18px;text-align:center;color:var(--zl-ink-soft);font-size:15px;background:var(--zl-beige-soft)}
+  .zl-ph-form b{display:block;color:var(--zl-ink);margin-bottom:6px}
+  .zl-ph-slide{display:flex;align-items:center;justify-content:center;height:360px;border:2px dashed var(--zl-mauve);border-radius:16px;background:var(--zl-beige-soft);color:var(--zl-ink-soft);font-size:15px;padding:18px;text-align:center}
+  /* MID CTA */
+  .zl-midcta{background:var(--zl-beige-soft);padding:54px 0}
+  .zl-midcta__in{display:flex;align-items:center;justify-content:space-between;gap:26px;flex-wrap:wrap}
+  .zl-midcta h2{font-size:clamp(26px,3.4vw,36px)}
+  .zl-midcta p{color:var(--zl-ink-soft);margin-top:6px}
+  @media(max-width:700px){.zl-midcta__in{flex-direction:column;text-align:center}.zl-midcta .zl-btn{width:100%;text-align:center}}
+  /* FAQ */
+  .zl-faq-list{max-width:780px;margin:40px auto 0}
+  .zl-faq{background:var(--zl-card);border-radius:14px;box-shadow:var(--zl-shadow);margin-bottom:14px;overflow:hidden;transition:box-shadow .22s ease}
+  .zl-faq:hover{box-shadow:var(--zl-shadow-hover)}
+  .zl-faq summary{cursor:pointer;list-style:none;font-family:'Cormorant Garamond',serif;font-size:19px;font-weight:600;color:var(--zl-ink);padding:20px 56px 20px 24px;position:relative}
+  .zl-faq summary::-webkit-details-marker{display:none}
+  .zl-faq summary::after{content:"+";position:absolute;right:22px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;background:var(--zl-beige-soft);color:var(--zl-mauve);display:flex;align-items:center;justify-content:center;font-family:'Inter';font-size:18px}
+  .zl-faq[open] summary::after{content:"\2013"}
+  .zl-faq .answer p{padding:0 24px 22px;color:var(--zl-ink-soft);font-size:16.5px}
+  /* FINAL */
+  .zl-final{background:var(--zl-mauve-dark);color:#fff;padding:88px 0}
+  .zl-final h2,.zl-final h3.zl-serif{color:#fff}
+  .zl-final .zl-sub{color:rgba(255,255,255,.78)}
+  .zl-final__grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start;margin-top:40px}
+  @media(max-width:900px){.zl-final__grid{grid-template-columns:1fr}}
+  .zl-final .zl-eyebrow{color:var(--zl-gold-1)}
+  .zl-contact{list-style:none;margin-top:22px}
+  .zl-contact li{display:flex;gap:12px;align-items:center;margin-bottom:14px;font-size:16px}
+  .zl-contact a{text-decoration:none}
+  .zl-contact .dot{width:9px;height:9px;border-radius:50%;background:var(--zl-gold-1);flex:none}
+  .zl-final__price{margin-top:20px;padding:16px 18px;border:1px solid rgba(242,210,122,.35);border-radius:12px;background:rgba(255,255,255,.06);font-size:15px;color:rgba(255,255,255,.85)}
+  .zl-final__price s{color:#F1A99E;font-weight:800;font-size:22px;text-decoration-thickness:2px}
+  .zl-final__price b{color:var(--zl-gold-1);font-size:26px;font-family:'Cormorant Garamond',serif;font-weight:700}
+  .zl-final .zl-form-box{background:#fff}
+  .zl-final .zl-form-box>h3{color:var(--zl-ink)}
+  /* FOOTER */
+  .zl-footer{background:#12100E;color:var(--zl-beige);text-align:center;padding:36px 22px;font-size:13.5px}
+  .zl-footer b{color:#fff;font-family:'Cormorant Garamond',serif;font-size:18px;letter-spacing:.12em;text-transform:uppercase;display:block;margin-bottom:6px}
+  /* REVEAL */
+  .zl-reveal{transition:opacity .6s ease, transform .6s ease}
+  .zl-js .zl-reveal{opacity:0;transform:translateY(18px)}
+  .zl-js .zl-reveal.in{opacity:1;transform:none}
+  .zl-page :focus-visible{outline:3px solid var(--zl-mauve-deep);outline-offset:2px}
+  @media (prefers-reduced-motion: reduce){.zl-page *{transition:none!important;animation:none!important}html{scroll-behavior:auto}.zl-js .zl-reveal{opacity:1;transform:none}}
+</style>
+<script>document.documentElement.classList.add('zl-js');</script>
+<div class="zl-page">
+<nav class="zl-nav">
+  <div class="zl-nav__in">
+    <a href="#top" class="zl-logo">Diamond Beauty &amp; SPA<span>Warszawa &middot; Bielany</span></a>
+    <ul class="zl-nav__links">
+      <li><a href="#to-dla-ciebie">Dla kogo</a></li>
+      <li><a href="#jak-dziala">2 etapy</a></li>
+      <li><a href="#oferta">Oferta</a></li>
+      <li><a href="#dlaczego">Dlaczego my</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li class="zl-nav__cta"><a href="#form-top" class="zl-btn">Zgłoś się do programu</a></li>
+    </ul>
+  </div>
+</nav>
+<!-- ============================ HERO ============================ -->
+<header class="zl-hero" id="top">
+  <div class="zl-wrap">
+    <div class="zl-hero__grid">
+      <div>
+        <span class="zl-hero__badge"><b>&#10022;</b> Warszawa &middot; Autorska terapia 2 etapy</span>
+        <p class="zl-limited">&#9203; Liczba miejsc w promocyjnej cenie jest ograniczona</p>
+        <h1>Cellulit, wiotka skóra i&nbsp;oporna tkanka tłuszczowa? <em>Program Metamorfozy Sylwetki: 10&nbsp;spotkań po 80&nbsp;minut za 1500&nbsp;zł zamiast 3400&nbsp;zł</em></h1>
+        <p class="lead">Prawdziwa zmiana sylwetki nie zaczyna się od jednego, przypadkowego zabiegu. Dlatego w Diamond Beauty &amp; SPA stworzyliśmy autorską, dwuetapową terapię &ndash; każda wizyta to aż 80 minut pracy nad Twoim ciałem.</p>
+        <div class="zl-exchange"><span class="ico">&#127873;</span><span>Teraz do programu dostajesz <b>GRATIS</b> saunę karbonową lub RF / liposukcję kawitacyjną.</span></div>
+        <a href="#form-top" class="zl-btn">Zgłoś się do programu &rarr;</a>
+      </div>
+      <div class="zl-hero__media">
+        <div class="zl-offer-visual" role="img" aria-label="Program Metamorfozy Sylwetki: 10 spotkań po 80 minut, 1500 zł zamiast 3400 zł">
+          <span class="zl-offer-visual__brand">Diamond Beauty &amp; SPA &middot; Warszawa</span>
+          <div class="zl-offer-visual__gem">&#9670;</div>
+          <div class="zl-offer-visual__title">Autorski 2-etapowy Program Metamorfozy Sylwetki</div>
+          <div class="zl-offer-visual__stats">
+            <div><strong>10</strong><span>spotkań w programie</span></div>
+            <div><strong>80</strong><span>minut każda wizyta</span></div>
+          </div>
+          <span class="zl-offer-visual__old">Cena regularna: <s>3400 zł</s></span>
+          <span class="zl-offer-visual__new">1500 zł</span>
+          <span class="zl-offer-visual__save">Oszczędzasz 1900 zł</span>
+          <p class="zl-offer-visual__gift"><b>+ GRATIS:</b> sauna karbonowa lub RF / liposukcja kawitacyjna</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+<!-- ============================ TRUST STRIP ============================ -->
+<section class="zl-trust">
+  <div class="zl-wrap zl-trust__grid">
+    <div><strong>80 minut każdej wizyty</strong><span>60 min na całą sylwetkę + 20 min na wybraną partię</span></div>
+    <div><strong>18 lat doświadczenia</strong><span>w pracy z kobiecą sylwetką</span></div>
+    <div><strong>Setki klientek</strong><span>przeszły już nasz program</span></div>
+  </div>
+</section>
+<!-- ============================ DLA KOGO ============================ -->
+<section id="to-dla-ciebie">
+  <div class="zl-wrap zl-center">
+    <div class="zl-divider"></div>
+    <h2>To program dla Ciebie, jeśli...</h2>
+    <p class="zl-sub">Rozpoznajesz siebie w którymś z poniższych punktów?</p>
+    <div class="zl-fit__grid">
+      <div class="zl-fit__item zl-reveal">Wydałaś już sporo na zabiegi, a efekty były chwilowe albo w ogóle ich nie widać</div>
+      <div class="zl-fit__item zl-reveal">Najbardziej przeszkadza Ci cellulit, wiotka skóra albo konkretna partia ciała</div>
+      <div class="zl-fit__item zl-reveal">Masz to jedno miejsce &ndash; brzuch, uda, pośladki albo boki &ndash; na które zawsze patrzysz najpierw</div>
+      <div class="zl-fit__item zl-reveal">Nie chodzi Ci o mniej kilogramów, tylko o lepiej wymodelowaną, jędrniejszą sylwetkę</div>
+      <div class="zl-fit__item zl-reveal">Masz dość krótkich, 30-minutowych zabiegów, po których nic się nie zmienia</div>
+      <div class="zl-fit__item zl-reveal">Chcesz zaplanowanej terapii, a nie kolejnej przypadkowej wizyty</div>
+      <div class="zl-fit__item zl-reveal">Marzysz o sylwestrowej sukience i chcesz zacząć wtedy, gdy jest jeszcze czas na efekt</div>
+      <div class="zl-fit__item zl-reveal">Szukasz gabinetu w Warszawie, który poprowadzi Cię krok po kroku</div>
+    </div>
+    <div class="zl-cta-row"><a href="#form-top" class="zl-btn">Sprawdź, czy program jest dla Ciebie &rarr;</a></div>
+  </div>
+</section>
+<!-- ============================ JAK DZIALA (2 ETAPY) + MITY ============================ -->
+<section id="jak-dziala" style="background:var(--zl-cream-2)">
+  <div class="zl-wrap">
+    <div class="zl-center">
+      <div class="zl-divider"></div>
+      <h2>Jak działa program &bdquo;2 etapy&rdquo;</h2>
+      <p class="zl-sub">Większość zabiegów na ciało trwa 30&ndash;40 minut. Zanim organizm zdąży w pełni zareagować, sesja się kończy. U nas jedna wizyta to aż 80 minut.</p>
+    </div>
+    <div class="zl-how__grid">
+      <div>
+        <div class="zl-how__step zl-reveal"><div class="zl-how__num">1</div><div><h3>Rozmowa i dobór programu</h3><p>Po zgłoszeniu oddzwaniamy, pytamy o Twój cel i sprawdzamy, czy program jest dla Ciebie odpowiedni.</p></div></div>
+        <div class="zl-how__step zl-reveal"><div class="zl-how__num">2</div><div><h3>Etap 1: 60 minut na całą sylwetkę</h3><p>Pracujemy kompleksowo nad cellulitem, wiotkością skóry i nadmiarem tkanki tłuszczowej, z technologiami dobranymi indywidualnie do Ciebie.</p></div></div>
+        <div class="zl-how__step zl-reveal"><div class="zl-how__num">3</div><div><h3>Etap 2: 20 minut na problematyczną partię</h3><p>Kolejne 20 minut poświęcamy miejscu, które najbardziej tego potrzebuje &ndash; na jednej wizycie łączymy 2 technologie.</p></div></div>
+        <div class="zl-how__step zl-reveal"><div class="zl-how__num">4</div><div><h3>10 spotkań = zaplanowana terapia</h3><p>Kolejne wizyty tworzą spójny proces rozłożony w czasie, zamiast pojedynczych zabiegów bez planu.</p></div></div>
+      </div>
+      <div>
+        <h3 class="zl-serif" style="font-size:30px">3 mity o modelowaniu sylwetki</h3>
+        <div class="zl-myth zl-reveal"><b>&bdquo;Zrobię jeden zabieg i cellulit zniknie&rdquo;</b><span>Gdyby to było takie proste, nie trzeba by było tworzyć całych terapii. Ciało potrzebuje czasu, regularności i dobrze zaplanowanego procesu.</span></div>
+        <div class="zl-myth zl-reveal"><b>&bdquo;Wystarczy schudnąć&rdquo;</b><span>Nie każda sylwetka potrzebuje mniej kilogramów. Przy cellulicie i wiotkiej skórze sama redukcja masy ciała często nie daje efektu, którego szukasz.</span></div>
+        <div class="zl-myth zl-reveal"><b>&bdquo;Zacznę w grudniu, zdążę przed Sylwestrem&rdquo;</b><span>Grudzień to czas na efekty, a nie na rozpoczynanie całego procesu. Zacznij jesienią, żeby zimą zobaczyć różnicę.</span></div>
+        <div class="zl-cta-row"><a href="#form-top" class="zl-btn">Zapytaj o program &rarr;</a></div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ============================ EFEKTY PRZED/PO - PODMIEŃ ============================ -->
+<!-- PODMIEŃ: wstaw zdjęcia przed/po od klientki zamiast .zl-ph-slide, np.
+     <div class="zl-slide"><img src="URL" alt="Modelowanie sylwetki - efekt przed i po" loading="lazy"><b>PRZED &rarr; PO</b></div>
+     Jeśli zdjęć nie będzie - usuń całą tę sekcję. -->
+<section id="efekty">
+  <div class="zl-wrap zl-center">
+    <div class="zl-divider"></div>
+    <h2>Zobacz efekty naszych klientek</h2>
+    <p class="zl-sub">Zdjęcia przed i po wykonane w Diamond Beauty &amp; SPA</p>
+    <div class="zl-carousel" id="efekty-carousel">
+      <button class="zl-arrow zl-arrow--prev" type="button" aria-label="Poprzednie zdjęcie">&#8249;</button>
+      <div class="zl-track">
+        <div class="zl-slide"><div class="zl-ph-slide">Zdjęcie przed/po #1 (do podmiany)</div><b>PRZED &rarr; PO</b></div>
+        <div class="zl-slide"><div class="zl-ph-slide">Zdjęcie przed/po #2 (do podmiany)</div><b>PRZED &rarr; PO</b></div>
+        <div class="zl-slide"><div class="zl-ph-slide">Zdjęcie przed/po #3 (do podmiany)</div><b>PRZED &rarr; PO</b></div>
+      </div>
+      <button class="zl-arrow zl-arrow--next" type="button" aria-label="Następne zdjęcie">&#8250;</button>
+    </div>
+    <div class="zl-cta-row"><a href="#form-top" class="zl-btn">Chcę takiej zmiany &rarr;</a></div>
+  </div>
+</section>
+<!-- ============================ OFERTA + FORMULARZ #1 ============================ -->
+<section id="oferta" style="background:var(--zl-cream-2)">
+  <div class="zl-wrap zl-center">
+    <div class="zl-divider"></div>
+    <h2>Program Metamorfozy Sylwetki 1500 zł zamiast 3400 zł</h2>
+    <p class="zl-sub">10 spotkań po 80 minut, dwa etapy na każdej wizycie i dodatkowy zabieg gratis</p>
+    <p class="zl-limited">&#9203; Liczba miejsc w promocyjnej cenie jest ograniczona</p>
+    <div class="zl-count-mini"><span class="lbl">&#9200; Oferta kończy się za:</span> <span class="time" id="zl-time" data-mins="15">15:00</span></div>
+    <div class="zl-two">
+      <div class="zl-card zl-reveal">
+        <span class="zl-eyebrow">Oferta specjalna</span>
+        <h3 class="zl-serif">Autorski Program &bdquo;2 etapy&rdquo;</h3>
+        <ul class="zl-offer-checks">
+          <li>10 spotkań zabiegowych, każde trwa aż 80 minut</li>
+          <li>Etap 1: 60 minut pracy nad całą sylwetką</li>
+          <li>Etap 2: 20 minut na partię, która najbardziej tego potrzebuje</li>
+          <li>2 technologie łączone na jednej wizycie, dobierane indywidualnie</li>
+          <li>Praca nad cellulitem, wiotkością skóry i tkanką tłuszczową w jednym programie</li>
+          <li>Program prowadzony przez specjalistkę z 18-letnim doświadczeniem</li>
+        </ul>
+        <div class="zl-price">
+          <span class="old">Cena regularna: <s>3400 zł</s></span>
+          <span class="new">Cena programu: 1500 zł</span>
+          <span class="promo">&#128142; Oszczędzasz 1900 zł na całym programie</span>
+        </div>
+        <div class="zl-bonus"><b>&#127873; GRATIS do programu:</b> sauna karbonowa lub RF / liposukcja kawitacyjna</div>
+      </div>
+      <div class="zl-form-box zl-reveal" id="form-top">
+        <h3 class="zl-serif">Zgłoś się do programu w promocyjnej cenie</h3>
+        <p>Zostaw kontakt &ndash; oddzwonimy i opowiemy o szczegółach</p>
+        <!-- PODMIEŃ: [contact-form-7 id="..." title="DBS Autorska terapia"] -->
+        <div class="zl-ph-form"><b>Formularz CF7</b>Tu wstaw shortcode formularza</div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ============================ OPINIE - PODMIEŃ ============================ -->
+<!-- PODMIEŃ: wstaw zrzuty opinii zamiast .zl-ph-slide, np.
+     <div class="zl-op-slide zl-reveal"><img src="URL" alt="Opinia klientki Diamond Beauty &amp; SPA" loading="lazy"></div>
+     Jeśli opinii nie będzie - usuń całą tę sekcję. -->
+<section id="opinie">
+  <div class="zl-wrap zl-center">
+    <div class="zl-divider"></div>
+    <h2>Co mówią nasze klientki</h2>
+    <p class="zl-sub">Z programu skorzystały już setki kobiet z Warszawy</p>
+    <div class="zl-carousel" id="opinie-carousel">
+      <button class="zl-arrow zl-arrow--prev" type="button" aria-label="Poprzednia opinia">&#8249;</button>
+      <div class="zl-track">
+        <div class="zl-op-slide zl-reveal"><div class="zl-ph-slide" style="height:240px">Opinia #1 (do podmiany)</div></div>
+        <div class="zl-op-slide zl-reveal"><div class="zl-ph-slide" style="height:240px">Opinia #2 (do podmiany)</div></div>
+        <div class="zl-op-slide zl-reveal"><div class="zl-ph-slide" style="height:240px">Opinia #3 (do podmiany)</div></div>
+      </div>
+      <button class="zl-arrow zl-arrow--next" type="button" aria-label="Następna opinia">&#8250;</button>
+    </div>
+    <div class="zl-cta-row"><a href="#form-final" class="zl-btn">Dołącz do nich &rarr;</a></div>
+  </div>
+</section>
+<!-- ============================ DLACZEGO MY ============================ -->
+<section id="dlaczego" style="background:var(--zl-cream-2)">
+  <div class="zl-wrap zl-center">
+    <div class="zl-divider"></div>
+    <h2>Dlaczego klientki wybierają Diamond Beauty &amp; SPA</h2>
+    <p class="zl-sub">Zaplanowana terapia zamiast przypadkowych zabiegów</p>
+    <div class="zl-why__grid zl-why">
+      <div class="zl-card zl-reveal"><div class="ico">&#9670;</div><h3>Jedyna taka terapia w Warszawie</h3><p>Autorski program dwuetapowy &ndash; w tej formule dostępny tylko w Diamond Beauty &amp; SPA.</p></div>
+      <div class="zl-card zl-reveal"><div class="ico">&#9670;</div><h3>Aż 80 minut na każdej wizycie</h3><p>Dajemy ciału czas na reakcję: godzina na całą sylwetkę i 20 minut na partię, która najbardziej tego potrzebuje.</p></div>
+      <div class="zl-card zl-reveal"><div class="ico">&#9670;</div><h3>2 technologie na jednym spotkaniu</h3><p>Technologie dobieramy indywidualnie do Twoich potrzeb i łączymy je podczas jednej wizyty.</p></div>
+      <div class="zl-card zl-reveal"><div class="ico">&#9670;</div><h3>18 lat doświadczenia</h3><p>Program stworzyła specjalistka, która od 18 lat pracuje z kobietami nad ich sylwetkami.</p></div>
+      <div class="zl-card zl-reveal"><div class="ico">&#9670;</div><h3>Plan zamiast zgadywania</h3><p>10 zaplanowanych spotkań tworzy spójną terapię, a nie serię przypadkowych wizyt.</p></div>
+      <div class="zl-card zl-reveal"><div class="ico">&#9670;</div><h3>Setki zadowolonych klientek</h3><p>To nie nowa, testowana właśnie metoda. Z programu skorzystały już setki kobiet.</p></div>
+    </div>
+    <div class="zl-cta-row"><a href="#form-final" class="zl-btn">Zgłoś się do programu &rarr;</a></div>
+  </div>
+</section>
+<!-- ============================ MID CTA ============================ -->
+<section class="zl-midcta">
+  <div class="zl-wrap zl-midcta__in">
+    <div>
+      <h2 class="zl-serif">Nie czekaj do grudnia &ndash; zacznij metamorfozę teraz</h2>
+      <p>10 spotkań po 80 minut za 1500 zł zamiast 3400 zł + zabieg gratis.</p>
+    </div>
+    <a href="#form-final" class="zl-btn">Zarezerwuj miejsce &rarr;</a>
+  </div>
+</section>
+<!-- ============================ FAQ ============================ -->
+<section id="faq">
+  <div class="zl-wrap zl-center">
+    <div class="zl-divider"></div>
+    <h2>Najczęściej zadawane pytania</h2>
+    <p class="zl-sub">Odpowiadamy na pytania, które najczęściej pojawiają się przed rozpoczęciem programu</p>
+    <div class="zl-faq-list" style="text-align:left">
+      <details class="zl-faq"><summary>Na czym polega program &bdquo;2 etapy&rdquo;?</summary><div class="answer"><p>Każda wizyta składa się z dwóch etapów: przez 60 minut pracujemy nad całą sylwetką, a przez kolejne 20 minut skupiamy się na partii, która najbardziej tego potrzebuje. Na jednym spotkaniu łączymy 2 technologie dobrane indywidualnie do Ciebie.</p></div></details>
+      <details class="zl-faq"><summary>Ile trwa cały program?</summary><div class="answer"><p>Program obejmuje 10 spotkań, a każde z nich trwa 80 minut. Harmonogram wizyt ustalamy razem z Tobą tak, żeby kolejne spotkania tworzyły spójną terapię.</p></div></details>
+      <details class="zl-faq"><summary>Nad czym pracujecie w trakcie programu?</summary><div class="answer"><p>Nad tym, co najczęściej wpływa na wygląd sylwetki: cellulitem, wiotkością skóry, nadmiarem tkanki tłuszczowej i wymodelowaniem konkretnych partii, takich jak brzuch, uda, pośladki czy boki.</p></div></details>
+      <details class="zl-faq"><summary>Ile kosztuje program?</summary><div class="answer"><p>Cały program (10 spotkań po 80 minut) kosztuje teraz 1500 zł zamiast 3400 zł &ndash; oszczędzasz 1900 zł. Liczba miejsc w promocyjnej cenie jest ograniczona.</p></div></details>
+      <details class="zl-faq"><summary>Co dostaję gratis?</summary><div class="answer"><p>Do programu dostajesz gratis saunę karbonową lub RF / liposukcję kawitacyjną. Szczegóły bonusu omówimy podczas rozmowy telefonicznej.</p></div></details>
+      <details class="zl-faq"><summary>Kiedy najlepiej zacząć, żeby zdążyć przed Sylwestrem?</summary><div class="answer"><p>Jak najwcześniej. Praca nad sylwetką wymaga czasu i regularności, a 10 spotkań trzeba rozłożyć na kilka tygodni. Zaczynając teraz, w grudniu możesz już cieszyć się efektami, zamiast szukać zabiegu last minute.</p></div></details>
+      <details class="zl-faq"><summary>Czy są przeciwwskazania?</summary><div class="answer"><p>Tak, zależą od technologii dobranych do Ciebie. Omawiamy je przed rozpoczęciem programu &ndash; poinformuj nas o ciąży, karmieniu piersią, chorobach i przyjmowanych lekach.</p></div></details>
+      <details class="zl-faq"><summary>Gdzie znajduje się gabinet?</summary><div class="answer"><p>Diamond Beauty &amp; SPA, ul. Gen. Klemensa Stanisława Rudnickiego 3A, lok. 2H, 01-858 Warszawa. Zapraszamy od poniedziałku do piątku w godz. 9:00&ndash;21:00 oraz w soboty 9:00&ndash;17:00.</p></div></details>
+      <details class="zl-faq"><summary>Jak wygląda zapis?</summary><div class="answer"><p>Wypełnij krótki formularz na stronie &ndash; oddzwonimy, opowiemy o szczegółach programu, odpowiemy na pytania i ustalimy dogodny termin pierwszej wizyty.</p></div></details>
+    </div>
+    <div class="zl-cta-row"><a href="#form-final" class="zl-btn">Zadaj pytanie &rarr;</a></div>
+  </div>
+</section>
+<!-- ============================ FINAL CTA + FORMULARZ #2 ============================ -->
+<section id="rezerwacja" class="zl-final">
+  <div class="zl-wrap">
+    <div class="zl-center">
+      <span class="zl-eyebrow">Zacznij już dziś</span>
+      <h2 class="zl-serif">Zacznij swoją metamorfozę sylwetki</h2>
+      <p class="zl-sub">Zostaw kontakt i zarezerwuj miejsce w programie za 1500 zł zamiast 3400 zł</p>
+    </div>
+    <div class="zl-final__grid">
+      <div>
+        <span class="zl-eyebrow">Kontakt</span>
+        <h3 class="zl-serif" style="font-size:32px">Diamond Beauty &amp; SPA Warszawa</h3>
+        <ul class="zl-contact">
+          <li><span class="dot"></span> ul. Gen. Klemensa Stanisława Rudnickiego 3A, lok. 2H, 01-858 Warszawa</li>
+          <li><span class="dot"></span> <a href="tel:+48506171040">Tel. 506 171 040</a></li>
+          <li><span class="dot"></span> Pon&ndash;pt 9:00&ndash;21:00, sobota 9:00&ndash;17:00</li>
+        </ul>
+        <div class="zl-final__price">Program Metamorfozy Sylwetki: <s>3400 zł</s> <b>1500 zł</b><br>+ sauna karbonowa lub RF / liposukcja kawitacyjna gratis</div>
+      </div>
+      <div class="zl-form-box" id="form-final">
+        <h3 class="zl-serif">Zgłoś się do programu</h3>
+        <p>Zostaw kontakt &ndash; oddzwonimy i opowiemy o szczegółach</p>
+        <!-- PODMIEŃ: [contact-form-7 id="..." title="DBS Autorska terapia"] -->
+        <div class="zl-ph-form"><b>Formularz CF7</b>Tu wstaw shortcode formularza</div>
+      </div>
+    </div>
+  </div>
+</section>
+<footer class="zl-footer">
+  <b>Diamond Beauty &amp; SPA</b>
+  Autorski Program Metamorfozy Sylwetki &ndash; Warszawa
+  <p style="margin-top:12px;opacity:.7">Diamond Beauty &amp; SPA. Wszelkie prawa zastrzeżone.</p>
+</footer>
+</div>
+<script>
+(function(){
+  function all(){var n=document.querySelectorAll('.zl-reveal');for(var i=0;i<n.length;i++)n[i].classList.add('in');}
+  try{
+    if('IntersectionObserver' in window){
+      var o=new IntersectionObserver(function(en){en.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');o.unobserve(e.target);}});},{threshold:.08});
+      var els=document.querySelectorAll('.zl-reveal');
+      for(var i=0;i<els.length;i++)o.observe(els[i]);
+      setTimeout(all,1800);
+    } else { all(); }
+  }catch(e){ all(); }
+})();
+</script>
+<script>
+(function(){
+  var el=document.getElementById('zl-time'); if(!el) return;
+  var mins=parseInt(el.getAttribute('data-mins')||'15',10)||15;
+  var end=Date.now()+mins*60*1000;
+  function t(){var d=Math.max(0,end-Date.now());
+    var m=String(Math.floor(d/60000)).padStart(2,'0');
+    var s=String(Math.floor(d/1000)%60).padStart(2,'0');
+    el.textContent=m+':'+s; if(d<=0)clearInterval(iv);}
+  t(); var iv=setInterval(t,1000);
+})();
+</script>
+<script>
+document.querySelectorAll('.zl-carousel').forEach(function(root){
+  var track=root.querySelector('.zl-track'); if(!track) return;
+  var prev=root.querySelector('.zl-arrow--prev');
+  var next=root.querySelector('.zl-arrow--next');
+  function snapOn(){track.classList.add('zl-snap');}
+  ['touchstart','pointerdown','wheel'].forEach(function(ev){root.addEventListener(ev,snapOn,{passive:true,once:true});});
+  var reduce=false;if(window.matchMedia){reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;}
+  function step(){var s=track.querySelector('.zl-slide,.zl-op-slide'); if(!s) return track.clientWidth;
+    var cs=getComputedStyle(track); var gap=parseFloat(cs.columnGap||cs.gap)||22;
+    return s.getBoundingClientRect().width+gap;}
+  function atEnd(){return track.scrollLeft+track.clientWidth>=track.scrollWidth-4;}
+  function atStart(){return track.scrollLeft<=4;}
+  function goNext(){atEnd()?track.scrollTo({left:0,behavior:'smooth'}):track.scrollBy({left:step(),behavior:'smooth'});}
+  function goPrev(){atStart()?track.scrollTo({left:track.scrollWidth,behavior:'smooth'}):track.scrollBy({left:-step(),behavior:'smooth'});}
+  var timer=null;
+  function startA(){if(reduce)return;stopA();timer=setInterval(goNext,5000);}
+  function stopA(){if(timer){clearInterval(timer);timer=null;}}
+  if(next){next.addEventListener('click',function(){goNext();startA();});}
+  if(prev){prev.addEventListener('click',function(){goPrev();startA();});}
+  root.addEventListener('mouseenter',stopA);
+  root.addEventListener('mouseleave',startA);
+  var st; track.addEventListener('scroll',function(){clearTimeout(st);st=setTimeout(startA,700);},{passive:true});
+  startA();
+});
+</script>
+<!-- /wp:html -->
