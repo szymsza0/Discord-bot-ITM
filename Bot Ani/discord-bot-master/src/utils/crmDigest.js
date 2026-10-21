@@ -38,6 +38,11 @@ const WON_PROJEKTY_GRACE_DAYS = 3;
 // historia sprzed przeglądu, a nie bieżące zaniedbanie.
 const WON_PROJEKTY_LOOKBACK_DAYS = 45;
 const ADS_WAITING_DAYS = 2;
+// Lead z ADS bez komentarza czeka na pierwszy kontakt, jeśli ma 3-14 dni;
+// starsze są "do posprzątania" (tylko licznik).
+const ADS_RECENT_DAYS = 14;
+const ADS_STALE_DAYS = 30;
+const LOST_WARNING_ROLES = ["meeting", "offer"];
 
 export function normalizeListName(name) {
   return normalizeName(name || "").trim();
@@ -54,26 +59,32 @@ export function listRole(listName) {
 // ── Nisza: tylko ITM Beauty ────────────────────────────────────────────────
 
 // Leady fachowców (osobna kampania ITM) nie trafiają do przeglądu w ogóle.
-// "fachow" łapie fachowiec / fachowcy / fachowca / fachowców w nazwie karty,
-// etykiecie albo opisie (formularz leada).
+// Sprawdzone na tablicy CRM (21.10.2026): etykiety nie odróżniają nisz (obie
+// mają "FB Ads"), za to formularz leada w opisie karty tak - beauty ma pole
+// "Zabieg do promowania:", fachowcy linię "Fachowiec" i pole "Zlecenia - ile?",
+// a karty fachowców mają w nazwie " - Fachowiec". Historia przeniesień do
+// listy "Fachowcy" NIE jest sygnałem: zdarzają się omyłkowe przeciągnięcia.
+// "fachow" łapie fachowiec / fachowcy / fachowca / fachowców; etykieta
+// "Fachowcy" (gdyby powstała) też zadziała.
 const FACHOWCY_RE = /fachow/;
+const FACHOWCY_FORM_RE = /zlecenia ile/;
+const BEAUTY_FORM_RE = /zabieg do promowania/;
 
 /**
  * @returns {{ niche: "beauty" | "fachowcy", reason: string }}
  */
 export function classifyNiche(card, labelNamesById = {}) {
   const labels = (card.idLabels || []).map((id) => labelNamesById[id]).filter(Boolean);
-  const sources = [
-    ["nazwa", card.name],
-    ["etykieta", labels.join(" ")],
-    ["opis", card.desc],
-  ];
-  for (const [source, text] of sources) {
-    if (FACHOWCY_RE.test(normalizeName(text || ""))) {
-      return { niche: "fachowcy", reason: `"fachow…" w polu: ${source}` };
-    }
+  const name = normalizeName(card.name || "");
+  const desc = normalizeName(card.desc || "");
+  if (FACHOWCY_RE.test(name)) return { niche: "fachowcy", reason: "„fachow…” w nazwie karty" };
+  if (FACHOWCY_FORM_RE.test(desc)) return { niche: "fachowcy", reason: "formularz fachowców w opisie" };
+  if (FACHOWCY_RE.test(desc)) return { niche: "fachowcy", reason: "„fachow…” w opisie" };
+  if (labels.some((l) => FACHOWCY_RE.test(normalizeName(l)))) {
+    return { niche: "fachowcy", reason: "etykieta fachowców" };
   }
-  return { niche: "beauty", reason: "brak oznak fachowców" };
+  if (BEAUTY_FORM_RE.test(desc)) return { niche: "beauty", reason: "formularz beauty w opisie" };
+  return { niche: "beauty", reason: "bez formularza (karta ręczna / starsza kampania)" };
 }
 
 // ── Daty ───────────────────────────────────────────────────────────────────
@@ -99,15 +110,22 @@ export function isWeekend(now) {
 }
 
 /**
- * Okno "spotkań na jutro": następny dzień, a w piątek do końca poniedziałku
- * (w weekend przegląd się nie wysyła).
+ * Okno spotkań: dziś i następny dzień, a w piątek do końca poniedziałku
+ * (w weekend przegląd się nie wysyła). "Dziś" jest w oknie, bo spotkanie
+ * umówione po wczorajszym przeglądzie na dziś inaczej nie pojawiłoby się nigdzie.
  */
 export function meetingWindow(now) {
   const today = dayjs(now).tz(TZ).startOf("day");
-  const from = today.add(1, "day");
   const isFriday = today.day() === 5;
-  const to = (isFriday ? today.add(3, "day") : from).endOf("day");
-  return { from, to, label: isFriday ? "Spotkania do poniedziałku" : "Spotkania jutro" };
+  const to = today.add(isFriday ? 3 : 1, "day").endOf("day");
+  return { from: today, to, label: isFriday ? "Spotkania dziś i do poniedziałku" : "Spotkania dziś i jutro" };
+}
+
+function relativeDay(date, now) {
+  const today = dayjs(now).tz(TZ).startOf("day");
+  if (date.isSame(today, "day")) return "dziś";
+  if (date.isSame(today.add(1, "day"), "day")) return "jutro";
+  return date.locale("pl").format("dd DD.MM");
 }
 
 // ── Sygnały z komentarzy ─────────────────────────────────────────────────────
@@ -116,10 +134,30 @@ export function meetingWindow(now) {
 export const HOT_RE =
   /zdecydowan|99\s?%|leci umowa|posz[łl]a umowa|umow[aęe] (posz[łl]a|wys[łl]an|leci)|decyzja na tak|\bna tak\b|podpisa[łl]a|podpisuje|chce (ruszy|zaczyna|startowa)/i;
 // "CA" (call) wielkimi literami - małe "ca" pojawia się w zwykłych słowach.
-const HOT_CASE_RE = /\bCA jutro\b/;
+const HOT_CASE_RE = /\bCA jutro\b(?!\s*\?)/;
 const HOT_NEGATED_RE = /nie ?(jest )?(jeszcze )?zdecydowan/i;
-export const LOST_RE =
-  /\bpas\b|rezygn|nie sta[cć]|kogo[sś] (ju[zż] )?znalaz|znalaz[łl]a (ju[zż] )?(kogo|inn)|ma (ju[zż] )?kogo[sś]|wsp[oó][lł]prac\S* z inn|nie (jest|s[aą]) zainteresowan|niezainteresowan|nie chce|odm[oó]wi|odmawia|\blost\b/i;
+export const LOST_RE = new RegExp(
+  [
+    "\\bpas\\b",
+    "rezygn",
+    "nie sta[cć]",
+    "kogo[sś] (ju[zż] )?znalaz",
+    "znalaz[łl]a (ju[zż] )?(kogo|inn)",
+    "ma (ju[zż] )?kogo[sś]",
+    // "nawiązała współpracę z inną firmą", ale nie "mają współpracę z inną agencją"
+    "(podj|nawi[aą]z|rozpocz|wybra|zdecydowa)\\S*[^.]{0,40}wsp[oó][lł]prac\\S* z inn",
+    "z inn\\S* (agencj|firm)\\S*[^.]{0,30}(podj|nawi[aą]z|zdecydowa|wybra)",
+    "nie jest zainteresowan",
+    "niezainteresowan",
+    "nie chce (wsp[oó][lł]prac|kontynuow|reklam|agencj)",
+    "odm[oó]wi",
+    "odmawia",
+    "\\blost\\b",
+  ].join("|"),
+  "i"
+);
+// Odwołane spotkanie to jeszcze nie przegrana - te zwroty nie liczą się jako "lost".
+const LOST_IGNORE_RE = /\S*rezygn\S*\s+ze\s+spotkani\S*/gi;
 // "NOD" (nie odbiera) bywa sklejone z liczbą prób ("3xNOD").
 const NOD_COUNT_RE = /(\d+)\s*x\s*NOD/g;
 const NOD_RE = /NOD/g;
@@ -129,12 +167,13 @@ const SIGNAL_COMMENTS = 5;
 
 export function isHotText(text) {
   const s = String(text || "");
-  if (HOT_NEGATED_RE.test(s)) return false;
+  // "NOD, CA jutro?" to nadzieja, nie decyzja.
+  if (HOT_NEGATED_RE.test(s) || /NOD/.test(s)) return false;
   return HOT_RE.test(s) || HOT_CASE_RE.test(s);
 }
 
 export function isLostText(text) {
-  return LOST_RE.test(String(text || ""));
+  return LOST_RE.test(String(text || "").replace(LOST_IGNORE_RE, ""));
 }
 
 function nodCount(text) {
@@ -177,45 +216,86 @@ export function commentSignal(comments = []) {
   return { decisive, nodStreak };
 }
 
+const MONTHS_PL = {
+  styczn: 1, lut: 2, marc: 3, kwietn: 4, maj: 5, czerw: 6,
+  lip: 7, sierp: 8, wrze: 9, pazdziern: 10, listopad: 11, grud: 12,
+};
+const MONTH_NAME_RE = new RegExp(`(\\d{1,2})\\s+(${Object.keys(MONTHS_PL).join("|")})[a-z]*`, "i");
+
+function buildDate(day, month, year, today) {
+  if (day < 1 || day > 31 || month < 1 || month > 12) return null;
+  let candidate = dayjs.tz(
+    `${year || today.year()}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+    TZ
+  );
+  // Data bez roku wpisana w grudniu ("05.01") to styczeń następnego roku.
+  if (!year && candidate.isBefore(today.subtract(60, "day"))) candidate = candidate.add(1, "year");
+  return candidate;
+}
+
 /**
- * Termin spotkania z komentarza "Termin: 22.10 12:00" (także "22.10.2026,
- * godz. 14", "jutro 10:00"). Zwraca dayjs w strefie Europe/Warsaw albo null.
+ * Termin spotkania z komentarza. Obsługuje notatkę settera z wklejonym
+ * zaproszeniem z kalendarza ("Termin: Spotkanie z p. Aneta | ITM Beauty
+ * Piątek, 16 października · 10:00–11:00am"), przełożenia ("spotkanie
+ * przełożone na 5.10.2026 godz. 9:15") i krótkie wpisy ("Termin: 22.10 12:00",
+ * "Termin: jutro 10:00"). Samo słowo "termin" w luźnym tekście się nie liczy.
+ * "jutro"/"dziś" i rok liczone są od daty komentarza (writtenAt).
+ * Zwraca dayjs w strefie Europe/Warsaw albo null.
  */
-export function parseMeetingTerm(text, now) {
-  const m = /termin\s*:\s*([^\n]{0,80})/i.exec(String(text || ""));
+export function parseMeetingTerm(text, writtenAt) {
+  // Zaproszenie z kalendarza jest wklejane w kilku liniach, więc bierzemy też
+  // kolejne linie.
+  const m = /(?:termin\s*:|termin\s+(?=spotkanie z)|prze[łl]o[żz]on\S*\s+na)\s*([\s\S]{0,220})/i.exec(
+    String(text || "")
+  );
   if (!m) return null;
   const rest = m[1];
-  const today = dayjs(now).tz(TZ).startOf("day");
+  const plain = normalizeName(rest);
+  const today = dayjs(writtenAt).tz(TZ).startOf("day");
 
   let date = null;
   let afterDate = rest;
-  for (const d of rest.matchAll(/(\d{1,2})[.\/-](\d{1,2})(?:[.\/-](\d{2,4}))?/g)) {
-    const day = Number(d[1]);
-    const month = Number(d[2]);
-    if (day < 1 || day > 31 || month < 1 || month > 12) continue;
-    let year = d[3] ? Number(d[3].length === 2 ? `20${d[3]}` : d[3]) : today.year();
-    let candidate = dayjs.tz(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`, TZ);
-    // "Termin: 05.01" wpisany w grudniu to styczeń następnego roku.
-    if (!d[3] && candidate.isBefore(today.subtract(60, "day"))) {
-      candidate = candidate.add(1, "year");
-    }
-    date = candidate;
-    afterDate = rest.slice(d.index + d[0].length);
-    break;
+  const named = MONTH_NAME_RE.exec(plain);
+  const numeric = [...rest.matchAll(/(\d{1,2})[.\/-](\d{1,2})(?:[.\/-](\d{2,4}))?(?![:\d])/g)].find(
+    (d) => Number(d[2]) >= 1 && Number(d[2]) <= 12
+  );
+  if (named && (!numeric || named.index <= numeric.index)) {
+    const key = Object.keys(MONTHS_PL).find((k) => named[2].toLowerCase().startsWith(k));
+    date = buildDate(Number(named[1]), MONTHS_PL[key], null, today);
+    // Godzina po dacie: szukamy w oryginalnym tekście od tej samej liczby dnia.
+    const dayAt = rest.search(new RegExp(`\\b${named[1]}\\s`));
+    afterDate = dayAt >= 0 ? rest.slice(dayAt + named[1].length) : rest;
+  } else if (numeric) {
+    const year = numeric[3] ? Number(numeric[3].length === 2 ? `20${numeric[3]}` : numeric[3]) : null;
+    date = buildDate(Number(numeric[1]), Number(numeric[2]), year, today);
+    afterDate = rest.slice(numeric.index + numeric[0].length);
+  } else if (/jutro/i.test(rest)) {
+    date = today.add(1, "day");
+  } else if (/dzi[sś]/i.test(rest)) {
+    date = today;
   }
-  if (!date) {
-    if (/jutro/i.test(rest)) date = today.add(1, "day");
-    else if (/dzi[sś]/i.test(rest)) date = today;
-    else return null;
-  }
+  if (!date) return null;
 
-  const time = /(\d{1,2})[:.](\d{2})/.exec(afterDate) || /godz\.?\s*(\d{1,2})/i.exec(afterDate);
+  const time =
+    /(\d{1,2})[:.](\d{2})\s*(am|pm)?(?:\s*[–-]\s*\d{1,2}[:.]\d{2}\s*(am|pm))?/i.exec(afterDate) ||
+    /godz\.?\s*(\d{1,2})/i.exec(afterDate);
   if (time) {
-    const hour = Number(time[1]);
+    let hour = Number(time[1]);
     const minute = Number(time[2] || 0);
+    const meridiem = (time[3] || time[4] || "").toLowerCase();
+    if (meridiem === "pm" && hour < 12) hour += 12;
     if (hour <= 23 && minute <= 59) return date.hour(hour).minute(minute);
   }
   return date;
+}
+
+/** Najnowszy termin spotkania z ostatnich komentarzy karty (najnowsze pierwsze). */
+export function latestMeetingTerm(comments = []) {
+  for (const comment of comments.slice(0, 3)) {
+    const term = parseMeetingTerm(comment.text, comment.date);
+    if (term) return term;
+  }
+  return null;
 }
 
 // ── Ocena regułami (zapas, gdy Claude nie odpowie) ────────────────────────────
@@ -244,16 +324,20 @@ function defaultNextStep(entry, temperature, now) {
   const due = dueInfo(entry, now);
   if (temperature === "zimny") return "zdecyduj: Lost albo ponowny kontakt";
   if (temperature === "gorący") {
-    return entry.role === "meeting" ? "przygotuj ofertę po spotkaniu" : "domknij: umowa i faktura";
+    if (entry.role === "meeting") return "przygotuj ofertę po spotkaniu";
+    return `domknij: umowa i faktura${due.state === "future" ? ` (kontakt ${fmtDay(due.due)})` : ""}`;
   }
   if (entry.role === "meeting") {
+    const term = latestMeetingTerm(entry.comments);
     if (due.state === "future") return `spotkanie ${fmtDay(due.due)}`;
-    if (due.state === "overdue") return "wpisz notatkę po spotkaniu i przesuń kartę";
+    if (term && !term.isBefore(dayjs(now).tz(TZ).startOf("day"))) return `spotkanie ${term.format("DD.MM HH:mm")}`;
+    if (due.state === "overdue" || term) return "wpisz notatkę po spotkaniu i przesuń kartę";
     return "ustal termin spotkania";
   }
   if (entry.role === "offer") {
     if (due.state === "future") return `follow-up oferty (${fmtDay(due.due)})`;
-    return "follow-up oferty, termin minął";
+    if (due.state === "overdue") return "follow-up oferty, termin minął";
+    return "follow-up oferty i ustaw termin";
   }
   if (due.state === "future") return `kontakt ${fmtDay(due.due)}`;
   return "zadzwoń ponownie i ustal termin";
@@ -333,6 +417,20 @@ function memberFirstName(member) {
 }
 
 /**
+ * Ile dni karta leży w obecnej liście; atLeast = data przeniesienia jest
+ * starsza niż historia, więc to dolna granica.
+ */
+export function daysInList(entry, now) {
+  if (entry.enteredListAt) return { days: daysBetween(entry.enteredListAt, now), atLeast: false };
+  if (entry.enteredListBefore) return { days: daysBetween(entry.enteredListBefore, now), atLeast: true };
+  return { days: null, atLeast: false };
+}
+
+function fmtDaysInList({ days, atLeast }) {
+  return `${atLeast ? "ponad " : ""}${days} d`;
+}
+
+/**
  * Łączy karty, listy, etykiety, członków i akcje tablicy w jeden opis karty.
  * Pomija karty fachowców i karty spoza znanych list.
  */
@@ -340,6 +438,8 @@ export function prepareEntries(snapshot) {
   const listsById = Object.fromEntries((snapshot.lists || []).map((l) => [l.id, l]));
   const labelNamesById = Object.fromEntries((snapshot.labels || []).map((l) => [l.id, l.name]));
   const membersById = Object.fromEntries((snapshot.members || []).map((m) => [m.id, m]));
+  // Od kiedy mamy historię akcji (komentarze, przeniesienia) w snapshot.actions.
+  const historySince = snapshot.historySince ? new Date(snapshot.historySince) : null;
 
   const commentsByCard = {};
   const movesByCard = {};
@@ -372,11 +472,20 @@ export function prepareEntries(snapshot) {
     }
 
     const comments = (commentsByCard[card.id] || []).sort((a, b) => (a.date < b.date ? 1 : -1));
-    // Kiedy karta trafiła do obecnej listy: ostatnie przeniesienie do niej,
-    // a gdy go brak w historii (utworzona od razu w liście) - data utworzenia.
+    // Kiedy karta trafiła do obecnej listy: ostatnie przeniesienie do niej.
+    // Bez przeniesienia w historii: karta utworzona po początku historii
+    // powstała od razu w tej liście (data utworzenia), a starsza leży tu co
+    // najmniej od początku historii (enteredListBefore).
     const lastMove = (movesByCard[card.id] || [])
       .filter((m) => m.toListId === card.idList)
       .sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+    const created = cardCreatedAt(card.id);
+    let enteredListAt = lastMove?.date || null;
+    let enteredListBefore = null;
+    if (!enteredListAt) {
+      if (!historySince || (created && created >= historySince)) enteredListAt = created?.toISOString() || null;
+      else enteredListBefore = historySince.toISOString();
+    }
 
     entries.push({
       id: card.id,
@@ -392,7 +501,8 @@ export function prepareEntries(snapshot) {
       owners: (card.idMembers || []).map((id) => memberFirstName(membersById[id])).filter(Boolean),
       labels: (card.idLabels || []).map((id) => labelNamesById[id]).filter(Boolean),
       comments,
-      enteredListAt: lastMove?.date || cardCreatedAt(card.id)?.toISOString() || null,
+      enteredListAt,
+      enteredListBefore,
     });
   }
   return { entries, excluded };
@@ -451,12 +561,17 @@ export function findDataWarnings(entries, grades, now, { projektyCards = null } 
   for (const e of entries) {
     if (OWNED_ROLES.includes(e.role)) {
       if (e.idMembers.length === 0) noOwner.push({ name: e.name, url: e.url, detail: e.listName });
-      if (e.role !== "invoice" && (!e.due || e.dueComplete)) {
+      // Spotkanie z datą w notatce settera ("Termin: …") ma znany kolejny krok.
+      const term = e.role === "meeting" ? latestMeetingTerm(e.comments) : null;
+      const knownMeeting = term && !term.isBefore(dayjs(now).tz(TZ).startOf("day"));
+      if (e.role !== "invoice" && (!e.due || e.dueComplete) && !knownMeeting) {
         noDue.push({ name: e.name, url: e.url, detail: e.listName });
       }
     }
     const grade = grades[e.id];
-    if (GRADED_ROLES.includes(e.role) && grade?.lost) {
+    // "Ponowny Kontakt" to świadome odłożenie ("nie teraz, proszę o kontakt w
+    // listopadzie") - ostrzegamy tylko o kartach w spotkaniach i ofertach.
+    if (LOST_WARNING_ROLES.includes(e.role) && grade?.lost) {
       const overdue = e.due && !e.dueComplete && dayjs(e.due).isBefore(now);
       lostInActive.push({
         name: e.name,
@@ -465,15 +580,16 @@ export function findDataWarnings(entries, grades, now, { projektyCards = null } 
       });
     }
     if (e.role === "invoice") {
-      const days = daysBetween(e.enteredListAt, now);
-      if (days !== null && days > FV_STALE_DAYS) {
-        staleInvoice.push({ name: e.name, url: e.url, detail: `${days} dni` });
+      const inList = daysInList(e, now);
+      if (inList.days !== null && inList.days > FV_STALE_DAYS) {
+        staleInvoice.push({ name: e.name, url: e.url, detail: fmtDaysInList(inList) });
       }
     }
     if (e.role === "won" && projektyCards) {
-      const days = daysBetween(e.enteredListAt, now);
+      const { days, atLeast } = daysInList(e, now);
       if (
         days !== null &&
+        !atLeast &&
         days >= WON_PROJEKTY_GRACE_DAYS &&
         days <= WON_PROJEKTY_LOOKBACK_DAYS &&
         !hasProjektyCard(e, projektyCards)
@@ -505,8 +621,8 @@ export function findUpcomingMeetings(entries, now) {
       const due = dayjs(e.due).tz(TZ);
       if (inWindow(due)) when = due;
     }
-    if (!when && e.comments[0]) {
-      const term = parseMeetingTerm(e.comments[0].text, now);
+    if (!when) {
+      const term = latestMeetingTerm(e.comments);
       if (inWindow(term)) when = term;
     }
     if (when) items.push({ when, name: e.name, url: e.url, owners: e.owners, idMembers: e.idMembers });
@@ -541,14 +657,17 @@ export function assembleDigest({ entries, excluded = [], grades, errors = [], pr
     return created && dayjs(created).isAfter(since);
   });
   const adsWaiting = ads
-    .filter((e) => e.comments.length === 0 && daysBetween(cardCreatedAt(e.id), now) > ADS_WAITING_DAYS)
-    .map((e) => ({ name: e.name, url: e.url, days: daysBetween(cardCreatedAt(e.id), now) }))
+    .map((e) => ({ name: e.name, url: e.url, days: daysBetween(cardCreatedAt(e.id), now), comments: e.comments.length }))
+    .filter((a) => a.comments === 0 && a.days > ADS_WAITING_DAYS && a.days <= ADS_RECENT_DAYS)
     .sort((a, b) => b.days - a.days);
+  const adsStale = ads.filter((e) => daysBetween(e.dateLastActivity, now) > ADS_STALE_DAYS).length;
 
+  // Faktury do 14 dni - czekamy na płatność; starsze są w ostrzeżeniach.
   const invoices = entries
     .filter((e) => e.role === "invoice")
-    .map((e) => ({ name: e.name, url: e.url, days: daysBetween(e.enteredListAt, now), owners: e.owners }))
-    .sort((a, b) => (b.days ?? 0) - (a.days ?? 0));
+    .map((e) => ({ name: e.name, url: e.url, inList: daysInList(e, now), owners: e.owners }))
+    .filter((i) => i.inList.days !== null && !i.inList.atLeast && i.inList.days <= FV_STALE_DAYS)
+    .sort((a, b) => b.inList.days - a.inList.days);
 
   const sources = graded.reduce((acc, e) => {
     acc[e.grade.source] = (acc[e.grade.source] || 0) + 1;
@@ -563,7 +682,7 @@ export function assembleDigest({ entries, excluded = [], grades, errors = [], pr
     cool: pick("chłodny"),
     cold: pick("zimny"),
     meetings: findUpcomingMeetings(entries, now),
-    ads: { newCount: adsNew.length, waiting: adsWaiting, total: ads.length },
+    ads: { newCount: adsNew.length, waiting: adsWaiting, stale: adsStale, total: ads.length },
     invoices,
     warnings: findDataWarnings(entries, grades, now, { projektyCards }),
     stats: { graded: graded.length, sources, excludedFachowcy: excluded.length },
@@ -725,8 +844,7 @@ export function buildDigestMessage(digest, { mentions = "" } = {}) {
       value: fitLines(
         digest.meetings.items.map((m) => {
           const time = m.when.hour() || m.when.minute() ? m.when.format("HH:mm") : "bez godz.";
-          const day = m.when.isSame(digest.meetings.from, "day") ? "" : `${m.when.locale("pl").format("dd DD.MM")} `;
-          return `• ${day}${time} ${cardLink(m, 34)}${ownerSuffix(m.owners)}`;
+          return `• ${relativeDay(m.when, digest.now)} ${time} ${cardLink(m, 34)}${ownerSuffix(m.owners)}`;
         }),
         LIMITS.field
       ),
@@ -734,18 +852,22 @@ export function buildDigestMessage(digest, { mentions = "" } = {}) {
   }
   if (digest.warnings.length) {
     const count = digest.warnings.reduce((n, w) => n + w.items.length, 0);
-    const per = Math.floor(LIMITS.field / digest.warnings.length);
+    // "lost" w aktywnej liście i Won bez Projektów to konkretne karty do
+    // ruszenia - dostają więcej miejsca i linki (pierwsze 3), reszta same nazwy.
+    const shares = { lost: 3, won: 2 };
+    const totalShares = digest.warnings.reduce((n, w) => n + (shares[w.key] || 1), 0);
     fields.push({
       name: `⚠️ Do poprawy w Trello (${count})`,
       value: truncate(
         digest.warnings
           .map((w) => {
             const head = `**${w.label} (${w.items.length}):** `;
+            const room = Math.floor((LIMITS.field * (shares[w.key] || 1)) / totalShares) - head.length - 2;
             const linked = w.key === "lost" || w.key === "won";
-            const items = w.items.map((i) =>
-              linked ? `${cardLink(i, 28)} (${i.detail})` : cardLabel(i.name, 26)
+            const items = w.items.map((i, index) =>
+              linked && index < 3 ? `${cardLink(i, 28)} (${i.detail})` : cardLabel(i.name, 26)
             );
-            return head + fitLines(items, Math.max(per - head.length - 2, 40), ", ");
+            return head + fitLines(items, Math.max(room, 40), ", ");
           })
           .join("\n"),
         LIMITS.field
@@ -756,13 +878,16 @@ export function buildDigestMessage(digest, { mentions = "" } = {}) {
     const parts = [`Nowe od wczoraj: **${digest.ads.newCount}**`];
     if (digest.ads.waiting.length) {
       parts.push(
-        `bez komentarza > ${ADS_WAITING_DAYS} dni: **${digest.ads.waiting.length}** - ` +
+        `Bez pierwszego kontaktu (${ADS_WAITING_DAYS + 1}-${ADS_RECENT_DAYS} dni): **${digest.ads.waiting.length}** - ` +
           fitLines(
             digest.ads.waiting.map((a) => `${cardLabel(a.name, 26)} (${a.days} d)`),
-            700,
+            650,
             ", "
           )
       );
+    }
+    if (digest.ads.stale) {
+      parts.push(`Do posprzątania (bez ruchu > ${ADS_STALE_DAYS} dni): ${digest.ads.stale} kart - Lost albo Ponowny Kontakt`);
     }
     fields.push({ name: "📥 Leady z ADS (Marlena)", value: truncate(parts.join("\n"), LIMITS.field) });
   }
@@ -770,7 +895,7 @@ export function buildDigestMessage(digest, { mentions = "" } = {}) {
     fields.push({
       name: `💰 Fv poszła - czeka na płatność (${digest.invoices.length})`,
       value: fitLines(
-        digest.invoices.map((i) => `${cardLabel(i.name, 26)}${i.days !== null ? ` (${i.days} d)` : ""}`),
+        digest.invoices.map((i) => `${cardLabel(i.name, 26)} (${fmtDaysInList(i.inList)})`),
         LIMITS.field,
         ", "
       ),

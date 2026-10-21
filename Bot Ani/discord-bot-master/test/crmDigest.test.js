@@ -91,16 +91,17 @@ describe("classifyNiche", () => {
       assert.equal(classifyNiche({ name }, labels).niche, "fachowcy", name);
     }
   });
-  test("pomija fachowców po etykiecie i po opisie", () => {
+  test("pomija fachowców po formularzu w opisie, po słowie w opisie i po etykiecie", () => {
+    const form = "Imię: Artur\nTelefon: 600\nFachowiec \nZlecenia - ile?:3\nStart: już\nNIP: 1";
+    assert.equal(classifyNiche({ name: "Artur Kamiński", desc: form }, labels).reason, "formularz fachowców w opisie");
+    assert.equal(classifyNiche({ name: "Adam Nowak", desc: "Kampania: Fachowcy 09.2026" }, labels).niche, "fachowcy");
     assert.equal(classifyNiche({ name: "Adam Nowak", idLabels: ["l3"] }, labels).niche, "fachowcy");
-    assert.equal(
-      classifyNiche({ name: "Adam Nowak", desc: "Kampania: Fachowcy 09.2026" }, labels).niche,
-      "fachowcy"
-    );
   });
-  test("zostawia leady beauty", () => {
-    assert.equal(classifyNiche({ name: "Anna Kowalska (AL)", idLabels: ["l1", "l2"] }, labels).niche, "beauty");
-    assert.equal(classifyNiche({ name: "Salon Glow - Meta ITMB" }, labels).niche, "beauty");
+  test("zostawia leady beauty, także 'Kampania Start' i karty bez formularza", () => {
+    const beautyForm = "Imię: Anna\nTelefon: 600\nZabieg do promowania: \nInstagram: \nFB:";
+    assert.equal(classifyNiche({ name: "Anna Kowalska (AL)", idLabels: ["l1", "l2"], desc: beautyForm }, labels).reason, "formularz beauty w opisie");
+    assert.equal(classifyNiche({ name: "Salon Glow - Meta ITMB", idLabels: ["l1"] }, labels).niche, "beauty");
+    assert.equal(classifyNiche({ name: "Krystian Wojewoda - Kampania Start", idLabels: [] }, labels).niche, "beauty");
   });
 });
 
@@ -115,11 +116,34 @@ describe("sygnały z komentarzy", () => {
     assert.equal(isHotText("nie jest zdecydowana"), false);
     assert.equal(isHotText("ca 3 tygodnie"), false);
   });
+  test("'NOD, CA jutro?' to nie gorący lead", () => {
+    assert.equal(isHotText("NOD, CA jutro?"), false);
+    assert.equal(isHotText("CA jutro?"), false);
+    assert.equal(isHotText("CA jutro 15:15"), true);
+  });
   test("frazy przegranej", () => {
     for (const t of ["pas", "rezygnuje", "nie stać jej teraz", "już kogoś znalazła", "podjęła współpracę z inną agencją", "nie jest zainteresowana"]) {
       assert.ok(isLostText(t), t);
     }
     assert.equal(isLostText("termin pasuje"), false);
+  });
+  test("prawdziwe komentarze z CRM, które NIE są przegraną", () => {
+    for (const t of [
+      "Początkowo była sceptycznie nastawiona do tematu leadów nie chce tracić czasu na osoby, które nie są zainteresowane",
+      "Klientka wczoraj poinformowała SMS-em o konieczności rezygnacji ze spotkania. Dziś wysłano wiadomość z propozycją kontaktu",
+      "idzie oferta, mają współpracę z inna agencja ale Pan Tomasz wydawal sie bardzo przekonany",
+    ]) {
+      assert.equal(isLostText(t), false, t);
+    }
+  });
+  test("prawdziwe komentarze z CRM, które SĄ przegraną", () => {
+    for (const t of [
+      "Pani Łucja zrezygnowała ze spotkania. Poinformowała, że po wczorajszym spotkaniu z inną agencją podjęła decyzję o rozpoczęciu współpracy.",
+      "Pani Agnieszka na ten moment podziękowała za ofertę, ponieważ nawiązała współpracę z inną firmą.",
+      "na ten moment pas - pani boi się, że straci budżet reklamowy",
+    ]) {
+      assert.ok(isLostText(t), t);
+    }
   });
   test("najnowszy rozstrzygający komentarz wygrywa", () => {
     const s = commentSignal([comment("nie jest zainteresowana", 1), comment("99% na tak", 5)]);
@@ -168,6 +192,15 @@ describe("gradeByRules (zapas za Claude)", () => {
     const g = gradeByRules(entry({ role: "meeting", listName: "Spotkanie umówione", due: daysAhead(1) }), NOW);
     assert.match(g.nextStep, /^spotkanie 22\.10/);
   });
+  test("spotkanie bez terminu karty, ale z 'Termin:' w notatce settera", () => {
+    const note = comment("Termin: Spotkanie z p. Agnieszka | ITM Beauty\nPoniedziałek, 2 listopada · 10:00–11:00am", 1);
+    const e = entry({ role: "meeting", listName: "Spotkanie umówione", due: null, comments: [note] });
+    assert.equal(gradeByRules(e, NOW).nextStep, "spotkanie 02.11 10:00");
+    assert.equal(findDataWarnings([e], {}, NOW).find((w) => w.key === "due"), undefined);
+    const past = entry({ role: "meeting", listName: "Spotkanie umówione", due: null, comments: [comment("Termin: 15.10 10:00", 7)] });
+    assert.equal(gradeByRules(past, NOW).nextStep, "wpisz notatkę po spotkaniu i przesuń kartę");
+    assert.equal(findDataWarnings([past], {}, NOW).find((w) => w.key === "due").items.length, 1);
+  });
   test("applyStalenessCap nie pozwala na gorący przy 50 dniach ciszy", () => {
     const capped = applyStalenessCap(
       { temperature: "gorący", reason: "x", nextStep: "y", lost: false, source: "Claude" },
@@ -188,9 +221,38 @@ describe("parseMeetingTerm", () => {
     const december = dayjs.tz("2026-12-20 07:30", TZ);
     assert.equal(parseMeetingTerm("Termin: 05.01", december).format("YYYY-MM-DD"), "2027-01-05");
   });
+  test("notatka settera z wklejonym zaproszeniem z kalendarza", () => {
+    const note =
+      "@reichszy zmiana terminu spotkania z p. Anetą. Termin: Spotkanie z p. Aneta Maciejewska | ITM Beauty " +
+      "\nPiątek, 23 października · 10:00–11:00am\nStrefa czasowa: Europe/Warsaw\nInformacje o dołączeniu";
+    assert.equal(parseMeetingTerm(note, NOW).format("YYYY-MM-DD HH:mm"), "2026-10-23 10:00");
+    const pm = "Termin Spotkanie z Oliwia | ITM Beauty Niedziela, 25 października · 1:30–2:30pm Strefa czasowa";
+    assert.equal(parseMeetingTerm(pm, NOW).format("YYYY-MM-DD HH:mm"), "2026-10-25 13:30");
+  });
+  test("przełożone spotkanie", () => {
+    assert.equal(
+      parseMeetingTerm("spotkanie przełożone na 5.11.2026 godz. 9:15", NOW).format("YYYY-MM-DD HH:mm"),
+      "2026-11-05 09:15"
+    );
+  });
   test("brak terminu albo bzdura = null", () => {
     assert.equal(parseMeetingTerm("dzwonić w piątek", NOW), null);
     assert.equal(parseMeetingTerm("Termin: do ustalenia", NOW), null);
+  });
+  test("słowo 'termin' w luźnej notatce to nie termin spotkania", () => {
+    const note = "Kontakt był umówiony na zeszłą środę, ustaliłyśmy termin. Dzisiaj kontakt skuteczny, 15.09 oddzwoni";
+    assert.equal(parseMeetingTerm(note, NOW), null);
+  });
+  test("'termin spotkania' w zdaniu nie uruchamia parsowania", () => {
+    assert.equal(parseMeetingTerm("oczekiwanie na termin spotkania, oddzwoni 15.09 o 10:00", NOW), null);
+    assert.equal(
+      parseMeetingTerm("Termin Spotkanie z Oliwia | ITM Beauty\nŚroda, 21 października · 6:00–7:00pm", NOW).format("DD.MM HH:mm"),
+      "21.10 18:00"
+    );
+  });
+  test("'jutro' liczone od daty komentarza, nie od dnia przeglądu", () => {
+    const writtenAt = dayjs.tz("2026-10-14 16:00", TZ);
+    assert.equal(parseMeetingTerm("Termin: jutro 11:00", writtenAt).format("YYYY-MM-DD HH:mm"), "2026-10-15 11:00");
   });
 });
 
@@ -199,11 +261,12 @@ describe("kalendarz", () => {
     assert.equal(isWeekend(dayjs.tz("2026-10-24 07:30", TZ)), true);
     assert.equal(isWeekend(NOW), false);
   });
-  test("w piątek okno spotkań sięga poniedziałku", () => {
+  test("okno spotkań: dziś i jutro, w piątek do poniedziałku", () => {
     const w = meetingWindow(dayjs.tz("2026-10-23 07:30", TZ));
-    assert.equal(w.from.format("YYYY-MM-DD"), "2026-10-24");
+    assert.equal(w.from.format("YYYY-MM-DD"), "2026-10-23");
     assert.equal(w.to.format("YYYY-MM-DD"), "2026-10-26");
-    assert.equal(meetingWindow(NOW).label, "Spotkania jutro");
+    assert.equal(meetingWindow(NOW).label, "Spotkania dziś i jutro");
+    assert.equal(meetingWindow(NOW).to.format("YYYY-MM-DD"), "2026-10-22");
   });
 });
 
@@ -213,9 +276,26 @@ describe("findUpcomingMeetings", () => {
       entry({ name: "A", role: "meeting", listName: "Spotkanie umówione", due: dayjs.tz("2026-10-22 11:00", TZ).toISOString() }),
       entry({ name: "B", role: "offer", due: daysAhead(5), comments: [comment("Termin: 22.10 09:00")] }),
       entry({ name: "C", role: "meeting", listName: "Spotkanie umówione", due: daysAhead(3) }),
+      entry({ name: "Wczoraj", role: "meeting", listName: "Spotkanie umówione", due: daysAgo(1) }),
     ];
     const m = findUpcomingMeetings(entries, NOW);
     assert.deepEqual(m.items.map((i) => i.name), ["B", "A"]);
+  });
+  test("termin z notatki settera, nawet gdy po niej przyszło 'spotkanie potwierdzone'", () => {
+    const e = entry({
+      name: "D",
+      role: "meeting",
+      listName: "Spotkanie umówione",
+      due: null,
+      comments: [
+        comment("spotkanie potwierdzone", 0),
+        comment("Termin: Spotkanie z D | ITM Beauty Czwartek, 22 października · 2:00–3:00pm", 2),
+      ],
+    });
+    const [item] = findUpcomingMeetings([e], NOW).items;
+    assert.equal(item.when.format("DD.MM HH:mm"), "22.10 14:00");
+    const field = buildDigestMessage(digestWith([e], {})).embeds[0].fields.find((f) => f.name.startsWith("📅"));
+    assert.match(field.value, /^• jutro 14:00 \[D\]/);
   });
 });
 
@@ -245,6 +325,18 @@ describe("findDataWarnings", () => {
     assert.match(warnings.find((w) => w.key === "lost").items[0].detail, /termin minął 07\.09/);
     assert.deepEqual(byKey.fv, ["Stara faktura"]);
     assert.deepEqual(byKey.won, ["Marta Zielińska (AL)"]);
+  });
+  test("'lost' w Ponownym Kontakcie to świadome odłożenie - bez ostrzeżenia", () => {
+    const parked = entry({ role: "recontact", listName: "Ponowny Kontakt", due: daysAhead(15) });
+    const warnings = findDataWarnings([parked], { [parked.id]: { temperature: "zimny", lost: true } }, NOW);
+    assert.equal(warnings.find((w) => w.key === "lost"), undefined);
+  });
+  test("karta starsza niż historia: Fv 'ponad N d', Won bez sprawdzania Projektów", () => {
+    const fv = entry({ name: "Stara Fv", role: "invoice", listName: "Fv poszła", due: null, enteredListAt: null, enteredListBefore: daysAgo(120) });
+    const won = entry({ name: "Stary Won", role: "won", listName: "Won", enteredListAt: null, enteredListBefore: daysAgo(4) });
+    const warnings = findDataWarnings([fv, won], {}, NOW, { projektyCards: [] });
+    assert.equal(warnings.find((w) => w.key === "fv").items[0].detail, "ponad 120 d");
+    assert.equal(warnings.find((w) => w.key === "won"), undefined);
   });
   test("bez danych z Projektów nie ma ostrzeżeń o Won", () => {
     const won = entry({ role: "won", listName: "Won", enteredListAt: daysAgo(5) });
@@ -286,6 +378,12 @@ describe("prepareEntries", () => {
     const { entries, excluded } = prepareEntries(snapshot);
     assert.deepEqual(entries.map((e) => e.name), ["Anna (AL)", "Faktura"]);
     assert.deepEqual(excluded.map((x) => x.card.name), ["Jan - fachowiec"]);
+  });
+  test("bez przeniesienia w historii karta sprzed historii ma tylko dolną granicę", () => {
+    const { entries } = prepareEntries({ ...snapshot, historySince: daysAgo(20) });
+    const fv = entries.find((e) => e.id === fvId);
+    assert.equal(fv.enteredListAt, null);
+    assert.equal(fv.enteredListBefore, new Date(daysAgo(20)).toISOString());
   });
   test("komentarze od najnowszego, autorzy po imieniu, data wejścia do listy", () => {
     const { entries } = prepareEntries(snapshot);
@@ -372,6 +470,24 @@ describe("buildDigestMessage", () => {
     }
     assert.match(embed.description, /…i jeszcze \d+/);
     assert.ok(!/\[Bardzo długa nazwa salonu kosmetycznego \[/.test(embed.description), "nawiasy kwadratowe usunięte z linków");
+  });
+  test("Leady z ADS: czekające tylko z ostatnich 14 dni, starsze jako licznik do posprzątania", () => {
+    const ads = (age, extra = {}) =>
+      entry({ id: idCreatedAt(daysAgo(age), String(7000 + age).padStart(16, "0")), role: "ads", listName: "Leady z ADS", dateLastActivity: daysAgo(age), ...extra });
+    const d = digestWith([ads(5), ads(10, { comments: [comment("NOD")] }), ads(40), ads(400)], {});
+    assert.deepEqual(d.ads.waiting.map((a) => a.days), [5]);
+    assert.equal(d.ads.stale, 2);
+    const field = buildDigestMessage(d).embeds[0].fields.find((f) => f.name.startsWith("📥"));
+    assert.match(field.value, /Do posprzątania \(bez ruchu > 30 dni\): 2 kart/);
+  });
+  test("Fv poszła: pole z płatnościami tylko do 14 dni, starsze w ostrzeżeniach", () => {
+    const fresh = entry({ name: "Świeża Fv", role: "invoice", listName: "Fv poszła", due: null, enteredListAt: daysAgo(3) });
+    const old = entry({ name: "Stara Fv", role: "invoice", listName: "Fv poszła", due: null, enteredListAt: daysAgo(30) });
+    const { fields } = buildDigestMessage(digestWith([fresh, old], {})).embeds[0];
+    const pay = fields.find((f) => f.name.startsWith("💰"));
+    assert.match(pay.value, /Świeża Fv \(3 d\)/);
+    assert.ok(!/Stara Fv/.test(pay.value));
+    assert.match(fields.find((f) => f.name.startsWith("⚠️")).value, /Stara Fv/);
   });
   test("wzmianki: opiekunowie gorących i spotkań, setter przy nowych leadach z ADS", () => {
     const hot = entry({ idMembers: ["m-aga"] });

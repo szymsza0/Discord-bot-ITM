@@ -440,6 +440,7 @@ export async function loadCrmSnapshot(now = dayjs()) {
     actions,
     projektyCards,
     cards: cardsPerList.flat(),
+    historySince: since,
     errors,
   };
 }

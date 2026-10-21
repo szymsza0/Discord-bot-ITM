@@ -39,15 +39,21 @@ if (option("--snapshot")) {
 if (flag("--niche")) {
   const listsById = Object.fromEntries(snapshot.lists.map((l) => [l.id, l]));
   const labelNamesById = Object.fromEntries((snapshot.labels || []).map((l) => [l.id, l.name]));
-  console.log("\n=== Reguła niszy (karty w listach przeglądu) ===");
+  const kept = {};
+  const dropped = [];
   for (const card of snapshot.cards) {
     const list = listsById[card.idList];
-    if (!list || !listRole(list.name)) continue;
+    if (card.closed || !list || !listRole(list.name)) continue;
     const { niche, reason } = classifyNiche(card, labelNamesById);
     const labels = (card.idLabels || []).map((id) => labelNamesById[id]).filter(Boolean);
-    console.log(
-      `${niche === "beauty" ? "ZOSTAJE" : "POMIJAM"} | ${list.name} | ${card.name} | etykiety: ${labels.join(", ") || "-"} | ${reason}`
-    );
+    if (niche === "beauty") (kept[reason] ||= []).push(card.name);
+    else dropped.push(`  POMIJAM | ${list.name} | ${card.name} | etykiety: ${labels.join(", ") || "-"} | ${reason}`);
+  }
+  console.log("\n=== Reguła niszy (otwarte karty w listach przeglądu) ===");
+  console.log(`Pomijam jako fachowców: ${dropped.length}`);
+  console.log(dropped.join("\n"));
+  for (const [reason, names] of Object.entries(kept)) {
+    console.log(`Zostawiam (${reason}): ${names.length}, np. ${names.slice(0, 6).join("; ")}`);
   }
 }
 
