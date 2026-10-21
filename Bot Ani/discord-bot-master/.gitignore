@@ -12,6 +12,8 @@ yarn-error.log*
 !.env.example
 *.pid
 *.pid.lock
+# Cache ocen porannego przeglądu CRM (utils/leadGrader.js)
+data/crm_grade_cache.json
 
 # Dependency directories
 node_modules/

@@ -116,13 +116,14 @@ client.once("ready", () => {
     `✅ Logged in as ${client.user.tag} and can be used in any Discord server.`
   );
 
-  // Codzienny !discovery dla Agnieszki i Szymona (patrz SCHEDULED_TARGET_NAMES
-  // w commands/discovery.js) na kanał DISCOVERY_CHANNEL_ID.
+  // Poranny przegląd CRM (jedna wiadomość, leady ITM Beauty wg temperatury)
+  // na kanał DISCOVERY_CHANNEL_ID, w dni robocze - patrz runScheduledDiscovery
+  // w commands/discovery.js.
   cron.schedule(
-    "30 7 * * *",
+    "30 7 * * 1-5",
     () => {
       runScheduledDiscovery(client).catch((error) =>
-        console.error("🚨 Błąd w zaplanowanym !discovery:", error)
+        console.error("🚨 Błąd w porannym przeglądzie CRM:", error)
       );
     },
     { timezone: "Europe/Warsaw" }

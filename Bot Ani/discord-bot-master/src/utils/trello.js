@@ -306,23 +306,65 @@ export async function fetchBoardMembers(boardId) {
 }
 
 /**
+ * GET na API Trello, który RZUCA przy błędzie, zamiast zwracać [] / null -
+ * dla przeglądu CRM, gdzie brak danych ma być widoczny jako "dane niepełne",
+ * a nie jako "brak wyników". Komunikat błędu nie zawiera klucza ani tokenu.
+ * @param {string} pathname - np. "lists/<id>/cards"
+ * @param {Object} params - parametry zapytania (bez key/token)
+ */
+export async function trelloGetStrict(pathname, params = {}) {
+  const query = new URLSearchParams({ ...params, key: TRELLO_KEY, token: TRELLO_TOKEN });
+  const response = await fetch(`${TRELLO_API_BASE}/${pathname}?${query}`);
+  if (!response.ok) {
+    throw new Error(`Trello ${pathname}: HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/**
+ * Akcje tablicy (komentarze, przeniesienia kart) od podanej daty, ze
+ * stronicowaniem po 1000. Rzuca przy błędzie (patrz trelloGetStrict).
+ * @param {string} boardId
+ * @param {Object} options
+ * @param {string} options.filter - np. "commentCard,updateCard:idList"
+ * @param {string} options.since - data ISO
+ */
+export async function fetchBoardActions(boardId, { filter, since }) {
+  const all = [];
+  let before = null;
+  for (;;) {
+    const params = {
+      filter,
+      since,
+      limit: 1000,
+      fields: "type,date,data,idMemberCreator",
+      memberCreator: "false",
+    };
+    if (before) params.before = before;
+    const page = await trelloGetStrict(`boards/${boardId}/actions`, params);
+    all.push(...page);
+    if (page.length < 1000) return all;
+    before = page[page.length - 1].id;
+  }
+}
+
+export const LIST_CARD_FIELDS =
+  "name,url,shortUrl,due,dueComplete,idMembers,idLabels,idList,dateLastActivity,closed";
+
+/**
  * Pobiera otwarte karty (nie zarchiwizowane) z danej listy
  * @param {string} listId - ID listy
- * @returns {Promise<Array>} - Array kart (pusty jeśli błąd)
+ * @param {Object} [options]
+ * @param {boolean} [options.throwOnError=false] - rzuć zamiast zwracać [] przy błędzie
+ * @param {string} [options.fields] - pola kart (domyślnie LIST_CARD_FIELDS)
+ * @returns {Promise<Array>} - Array kart (pusty jeśli błąd i throwOnError=false)
  */
-export async function fetchListCards(listId) {
+export async function fetchListCards(listId, { throwOnError = false, fields = LIST_CARD_FIELDS } = {}) {
   try {
-    const url = `${TRELLO_API_BASE}/lists/${listId}/cards?key=${TRELLO_KEY}&token=${TRELLO_TOKEN}&fields=name,url,due,dueComplete,idMembers,closed`;
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      console.error(`❌ Trello API error fetching cards for list ${listId}: ${response.status}`);
-      return [];
-    }
-
-    return await response.json();
+    return await trelloGetStrict(`lists/${listId}/cards`, { fields });
   } catch (error) {
-    console.error(`🚨 Error fetching cards for list ${listId}:`, error);
+    console.error(`🚨 Error fetching cards for list ${listId}:`, error.message);
+    if (throwOnError) throw error;
     return [];
   }
 }

@@ -9,10 +9,25 @@ import {
   fetchTrelloLists,
   fetchBoardMembers,
   fetchListCards,
+  fetchBoardActions,
+  trelloGetStrict,
   normalizeName,
+  LIST_CARD_FIELDS,
 } from "../utils/trello.js";
 import { getAllUserMappings } from "../utils/database.js";
 import { DISCOVERY_CHANNEL_ID } from "../config.js";
+import {
+  TZ,
+  GRADED_ROLES,
+  classifyNiche,
+  listRole,
+  isWeekend,
+  prepareEntries,
+  assembleDigest,
+  buildDigestMessage,
+  peopleToMention,
+} from "../utils/crmDigest.js";
+import { gradeEntries } from "../utils/leadGrader.js";
 import dayjs from "dayjs";
 import "dayjs/locale/pl.js";
 import utc from "dayjs/plugin/utc.js";
@@ -26,31 +41,30 @@ dayjs.tz.setDefault("Europe/Warsaw");
 // https://trello.com/b/DfUfi8d6/itm-crm - board resolved by shortLink instead
 // of by name search, since Trello lets a shortLink stand in for a board ID.
 const CRM_BOARD_SHORT_LINK = "DfUfi8d6";
+// [[ C-Level ]] Projekty - tu trafiają sprzedane karty (sprawdzamy, czy
+// każdy "Won" ma tu swoją kartę). ID z apps_script_leady_trello.js.
+const PROJEKTY_BOARD_ID = "677acb7a9e55538cd27e7b85";
 // Listy skanowane w !discovery. Dopasowanie ignoruje wielkość liter i
 // polskie znaki diakrytyczne (patrz isListMatch), więc realne nazwy list
-// w Trello mogą mieć polskie znaki ("Oferta do wysłania" itd.).
+// w Trello mogą mieć polskie znaki ("Spotkanie umówione" itd.).
 const TARGET_LIST_NAMES = [
-  "oferta do wyslania",
-  "ponowny kontakt",
+  "leady z ads",
+  "spotkanie umowione",
   "oferta wyslana",
   "fv poszla",
+  "ponowny kontakt",
 ];
+// Historia komentarzy i przeniesień brana do porannego przeglądu.
+const ACTIONS_HISTORY_DAYS = 120;
+// Setter (umawia spotkania z "Leady z ADS") - wzmianka, gdy są nowe leady.
+const SETTER_NAME = "Marlena";
 const DAYS_AHEAD = 3;
 const SELECT_TIMEOUT_MS = 60000;
-// Osoby skanowane przez codzienny, zaplanowany !discovery (patrz runScheduledDiscovery).
-export const SCHEDULED_TARGET_NAMES = ["Agnieszka", "Szymon"];
 
-// Leady (karty CRM), których NIE pokazujemy w powiadomieniach sales - dopasowanie
-// po fragmencie nazwy karty, bez uwzględniania wielkości liter i polskich znaków
-// (patrz normalizeName). Dotyczy zarówno codziennego przeglądu, jak i ręcznego
-// !discovery. Dopisz kolejne wzorce, żeby wyciszyć następne rodzaje leadów.
-const NOTIFY_EXCLUDED_NAME_PATTERNS = ["fachowiec"];
-
-function isCardNotifyExcluded(card) {
-  const name = normalizeName(card?.name || "");
-  return NOTIFY_EXCLUDED_NAME_PATTERNS.some((pattern) =>
-    name.includes(normalizeName(pattern))
-  );
+// Leady fachowców nie trafiają ani do porannego przeglądu, ani do ręcznego
+// !discovery - reguła rozpoznania niszy jest w utils/crmDigest.js (classifyNiche).
+function isCardNotifyExcluded(card, labelNamesById) {
+  return classifyNiche(card, labelNamesById).niche !== "beauty";
 }
 
 function errorEmbed(desc) {
@@ -86,9 +100,13 @@ async function resolveCrmBoard() {
     );
   }
 
-  const [lists, members] = await Promise.all([
+  const [lists, members, labels] = await Promise.all([
     fetchTrelloLists(board.id),
     fetchBoardMembers(board.id),
+    trelloGetStrict(`boards/${board.id}/labels`, { fields: "name", limit: 1000 }).catch((err) => {
+      console.error("🚨 Nie udało się pobrać etykiet CRM:", err.message);
+      return null;
+    }),
   ]);
 
   if (!lists || lists.length === 0) {
@@ -112,33 +130,44 @@ async function resolveCrmBoard() {
     boardName: board.name || "ITM CRM",
     matchedLists,
     members,
+    labelNamesById: Object.fromEntries((labels || []).map((l) => [l.id, l.name])),
+    labelsFailed: labels === null,
   };
 }
 
 /**
  * Skanuje dopasowane listy pod kątem otwartych kart przypisanych do
  * memberId, z terminem przeterminowanym lub w ciągu DAYS_AHEAD dni.
+ * Listy, których nie udało się pobrać, trafiają do failedLists (zamiast
+ * po cichu udawać pustą listę).
  */
-async function scanMemberCards(matchedLists, memberId) {
+async function scanMemberCards(matchedLists, memberId, labelNamesById = {}) {
   const now = dayjs().tz("Europe/Warsaw");
   const deadline = now.add(DAYS_AHEAD, "day").endOf("day");
 
   const listResults = [];
+  const failedLists = [];
   for (const list of matchedLists) {
-    const cards = await fetchListCards(list.id);
+    let cards;
+    try {
+      cards = await fetchListCards(list.id, { throwOnError: true, fields: `${LIST_CARD_FIELDS},desc` });
+    } catch {
+      failedLists.push(list.name);
+      continue;
+    }
     const memberCards = cards
       .filter(
         (card) =>
           card.idMembers?.includes(memberId) &&
           isDueInScope(card, deadline) &&
-          !isCardNotifyExcluded(card)
+          !isCardNotifyExcluded(card, labelNamesById)
       )
       .sort((a, b) => new Date(a.due) - new Date(b.due));
 
     listResults.push({ listName: list.name, cards: memberCards });
   }
 
-  return { listResults, now };
+  return { listResults, failedLists, now };
 }
 
 /**
@@ -149,9 +178,24 @@ function buildDiscoveryEmbeds({
   boardName,
   matchedLists,
   listResults,
+  failedLists = [],
   now,
 }) {
   const totalCards = listResults.reduce((sum, r) => sum + r.cards.length, 0);
+  const incompleteNote = failedLists.length
+    ? `⚠️ **Dane niepełne** - nie udało się pobrać list: ${failedLists.join(", ")}.\n`
+    : "";
+
+  if (totalCards === 0 && failedLists.length) {
+    return [
+      new EmbedBuilder()
+        .setColor("#FFA500")
+        .setTitle("⚠️ Dane niepełne")
+        .setDescription(
+          `${incompleteNote}W pozostałych listach brak kart przeterminowanych lub z terminem w ciągu ${DAYS_AHEAD} dni dla **${memberLabel}**.`
+        ),
+    ];
+  }
 
   if (totalCards === 0) {
     return [
@@ -172,7 +216,8 @@ function buildDiscoveryEmbeds({
       .setColor("#0079BF")
       .setTitle(`🔎 Discovery - ${memberLabel}`)
       .setDescription(
-        `**Board:** ${boardName}\n` +
+        incompleteNote +
+          `**Board:** ${boardName}\n` +
           `**Kryteria:** przeterminowane lub do zrobienia w ciągu ${DAYS_AHEAD} dni\n` +
           `**Listy:** ${matchedLists.map((l) => l.name).join(", ")}\n` +
           `**Łącznie kart:** ${totalCards}`
@@ -284,9 +329,10 @@ export async function processDiscoveryCommand(message) {
       embeds: [infoEmbed(`⏳ Skanuję karty dla **${memberLabel}**...`)],
     });
 
-    const { listResults, now } = await scanMemberCards(
+    const { listResults, failedLists, now } = await scanMemberCards(
       resolved.matchedLists,
-      selectedMember.id
+      selectedMember.id,
+      resolved.labelNamesById
     );
 
     const embeds = buildDiscoveryEmbeds({
@@ -294,6 +340,7 @@ export async function processDiscoveryCommand(message) {
       boardName: resolved.boardName,
       matchedLists: resolved.matchedLists,
       listResults,
+      failedLists: resolved.labelsFailed ? [...failedLists, "etykiety (filtr fachowców)"] : failedLists,
       now,
     });
 
@@ -345,84 +392,140 @@ async function resolveMentionPrefix(guild, trelloMember) {
 }
 
 /**
- * Codzienny, zaplanowany odpowiednik !discovery (patrz cron w src/index.js).
- * Skanuje CRM dla SCHEDULED_TARGET_NAMES i publikuje wynik na
- * DISCOVERY_CHANNEL_ID, oznaczając każdą osobę (jeśli ma !connect).
+ * Pobiera wszystko, czego potrzebuje poranny przegląd: listy, etykiety,
+ * członków i karty CRM, komentarze/przeniesienia z ostatnich
+ * ACTIONS_HISTORY_DAYS dni oraz karty tablicy Projekty. Błąd pojedynczego
+ * zapytania nie przerywa przeglądu - trafia do snapshot.errors i w
+ * wiadomości pojawia się "⚠️ Dane niepełne". Rzuca tylko, gdy nie ma z czego
+ * zbudować przeglądu (board albo listy).
+ */
+export async function loadCrmSnapshot(now = dayjs()) {
+  const board = await fetchTrelloBoardDetails(CRM_BOARD_SHORT_LINK);
+  if (!board || !board.id) {
+    throw new Error(
+      `Nie udało się wczytać board'a ITM CRM (trello.com/b/${CRM_BOARD_SHORT_LINK}).`
+    );
+  }
+
+  const errors = [];
+  const attempt = async (label, fn, fallback) => {
+    try {
+      return await fn();
+    } catch (err) {
+      console.error(`🚨 Przegląd CRM: nie udało się pobrać "${label}":`, err.message);
+      errors.push(label);
+      return fallback;
+    }
+  };
+
+  const lists = await trelloGetStrict(`boards/${board.id}/lists`, { fields: "name,closed" });
+  const crmLists = lists.filter((l) => !l.closed && listRole(l.name));
+  const since = dayjs(now).subtract(ACTIONS_HISTORY_DAYS, "day").toISOString();
+
+  const [labels, members, actions, projektyCards, ...cardsPerList] = await Promise.all([
+    attempt("etykiety (filtr fachowców)", () => trelloGetStrict(`boards/${board.id}/labels`, { fields: "name", limit: 1000 }), []),
+    attempt("członkowie tablicy", () => trelloGetStrict(`boards/${board.id}/members`, { fields: "fullName,username" }), []),
+    attempt("komentarze i historia kart", () => fetchBoardActions(board.id, { filter: "commentCard,updateCard:idList", since }), []),
+    attempt("tablica [[ C-Level ]] Projekty", () => trelloGetStrict(`boards/${PROJEKTY_BOARD_ID}/cards/all`, { fields: "name,desc,closed" }), null),
+    ...crmLists.map((list) =>
+      attempt(`lista „${list.name}”`, () => fetchListCards(list.id, { throwOnError: true, fields: `${LIST_CARD_FIELDS},desc` }), [])
+    ),
+  ]);
+
+  return {
+    boardName: board.name || "ITM CRM",
+    lists,
+    labels,
+    members,
+    actions,
+    projektyCards,
+    cards: cardsPerList.flat(),
+    errors,
+  };
+}
+
+/**
+ * Buduje poranny przegląd CRM (bez wysyłania): pobranie danych, pominięcie
+ * fachowców, ocena temperatury (Claude Haiku + reguły) i złożenie sekcji.
+ * Używane przez runScheduledDiscovery i skrypt podglądu
+ * (src/tests/crm-digest-dry-run.js).
+ * @param {object} [options]
+ * @param {object} [options.snapshot] - gotowe dane zamiast pobierania z Trello
+ * @param {boolean} [options.useAi=true] - false = tylko reguły, bez API Claude
+ */
+export async function buildCrmDigest({ now = dayjs().tz(TZ), snapshot = null, useAi = true } = {}) {
+  const data = snapshot || (await loadCrmSnapshot(now));
+  const { entries, excluded } = prepareEntries(data);
+  const grades = await gradeEntries(
+    entries.filter((e) => GRADED_ROLES.includes(e.role)),
+    now,
+    { useAi }
+  );
+  const digest = assembleDigest({
+    entries,
+    excluded,
+    grades,
+    errors: data.errors || [],
+    projektyCards: data.projektyCards,
+    now,
+  });
+  return { digest, entries, excluded, snapshot: data };
+}
+
+/**
+ * Codzienny poranny przegląd CRM (patrz cron w src/index.js): JEDNA
+ * wiadomość na DISCOVERY_CHANNEL_ID z leadami ITM Beauty pogrupowanymi wg
+ * temperatury, spotkaniami na jutro i brakami w danych. W weekend i gdy nie
+ * ma czego pokazać - nic nie wysyła.
  */
 export async function runScheduledDiscovery(client) {
+  const now = dayjs().tz(TZ);
+  if (isWeekend(now)) return;
+
   if (!DISCOVERY_CHANNEL_ID) {
     console.error(
-      "🚨 Zaplanowany !discovery pominięty: brak DISCOVERY_CHANNEL_ID w konfiguracji."
+      "🚨 Poranny przegląd CRM pominięty: brak DISCOVERY_CHANNEL_ID w konfiguracji."
     );
     return;
   }
 
   const channel = await client.channels.fetch(DISCOVERY_CHANNEL_ID).catch((err) => {
-    console.error("🚨 Nie udało się pobrać kanału dla zaplanowanego !discovery:", err);
+    console.error("🚨 Nie udało się pobrać kanału dla porannego przeglądu CRM:", err);
     return null;
   });
   if (!channel) return;
 
-  let resolved;
+  let result;
   try {
-    resolved = await resolveCrmBoard();
+    result = await buildCrmDigest({ now });
   } catch (err) {
-    console.error("🚨 Zaplanowany !discovery: błąd wczytywania board'a:", err);
-    await channel.send({ embeds: [errorEmbed(err.message)] }).catch(() => {});
+    console.error("🚨 Poranny przegląd CRM: błąd budowania przeglądu:", err);
+    await channel
+      .send({
+        embeds: [
+          new EmbedBuilder()
+            .setColor("#FFA500")
+            .setTitle("⚠️ Dane niepełne - przegląd CRM pominięty")
+            .setDescription(`Nie udało się pobrać danych z Trello: \`${err.message}\``),
+        ],
+      })
+      .catch(() => {});
     return;
   }
 
-  const todayLabel = dayjs().tz("Europe/Warsaw").format("DD.MM.YYYY");
-
-  for (const targetName of SCHEDULED_TARGET_NAMES) {
-    try {
-      const normalizedTarget = normalizeName(targetName);
-      const member = resolved.members.find((m) =>
-        normalizeName(m.fullName || m.username || "").includes(normalizedTarget)
-      );
-
-      if (!member) {
-        await channel.send({
-          embeds: [
-            errorEmbed(
-              `Nie znalazłem "${targetName}" wśród członków board'a ${resolved.boardName}.`
-            ),
-          ],
-        });
-        continue;
-      }
-
-      const { listResults, now } = await scanMemberCards(
-        resolved.matchedLists,
-        member.id
-      );
-      const embeds = buildDiscoveryEmbeds({
-        memberLabel: member.fullName || member.username,
-        boardName: resolved.boardName,
-        matchedLists: resolved.matchedLists,
-        listResults,
-        now,
-      });
-
-      const mentionPrefix = await resolveMentionPrefix(channel.guild, member);
-      await channel.send({
-        content: `${mentionPrefix} — poranny przegląd CRM (${todayLabel})`,
-        embeds: [embeds[0]],
-      });
-      for (let i = 1; i < embeds.length; i++) {
-        await channel.send({ embeds: [embeds[i]] });
-      }
-    } catch (err) {
-      console.error(`🚨 Zaplanowany !discovery: błąd dla "${targetName}":`, err);
-      await channel
-        .send({
-          embeds: [
-            errorEmbed(
-              `Błąd podczas przetwarzania "${targetName}": \`${err.message}\``
-            ),
-          ],
-        })
-        .catch(() => {});
-    }
+  const { digest, snapshot } = result;
+  const members = snapshot.members || [];
+  const setter = members.find((m) =>
+    normalizeName(m.fullName || m.username || "").includes(normalizeName(SETTER_NAME))
+  );
+  const mentionIds = peopleToMention(digest, { setterId: setter?.id || null });
+  const mentions = [];
+  for (const id of mentionIds) {
+    const member = members.find((m) => m.id === id);
+    if (member) mentions.push(await resolveMentionPrefix(channel.guild, member));
   }
+
+  const message = buildDigestMessage(digest, { mentions: mentions.join(" ") });
+  if (!message) return;
+  await channel.send(message);
 }
