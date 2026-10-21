@@ -54,8 +54,9 @@ const TARGET_LIST_NAMES = [
   "fv poszla",
   "ponowny kontakt",
 ];
-// Historia komentarzy i przeniesień brana do porannego przeglądu.
-const ACTIONS_HISTORY_DAYS = 120;
+// Historia komentarzy i przeniesień brana do porannego przeglądu (ok. 1,5 tys.
+// akcji na pół roku, czyli 2 zapytania) - dłuższa łapie stare "lost" w ofertach.
+const ACTIONS_HISTORY_DAYS = 180;
 // Setter (umawia spotkania z "Leady z ADS") - wzmianka, gdy są nowe leady.
 const SETTER_NAME = "Marlena";
 const DAYS_AHEAD = 3;
@@ -457,7 +458,7 @@ export async function loadCrmSnapshot(now = dayjs()) {
 export async function buildCrmDigest({ now = dayjs().tz(TZ), snapshot = null, useAi = true } = {}) {
   const data = snapshot || (await loadCrmSnapshot(now));
   const { entries, excluded } = prepareEntries(data);
-  const grades = await gradeEntries(
+  const { grades, aiError } = await gradeEntries(
     entries.filter((e) => GRADED_ROLES.includes(e.role)),
     now,
     { useAi }
@@ -468,6 +469,7 @@ export async function buildCrmDigest({ now = dayjs().tz(TZ), snapshot = null, us
     grades,
     errors: data.errors || [],
     projektyCards: data.projektyCards,
+    aiError,
     now,
   });
   return { digest, entries, excluded, snapshot: data };

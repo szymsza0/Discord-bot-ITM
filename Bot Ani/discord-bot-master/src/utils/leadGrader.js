@@ -2,12 +2,14 @@
 // Ocena "temperatury" leadów z CRM przez Claude Haiku (ostatnie komentarze),
 // z cache po id karty + dacie ostatniej aktywności i zapasową oceną regułami
 // (crmDigest.gradeByRules), gdy API nie odpowie albo zwróci złe dane.
+// Haiku działa, gdy jest ANTHROPIC_API_KEY i nie ustawiono CRM_DIGEST_AI=0;
+// inaczej oceniają same reguły słów kluczowych.
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import fs from "fs/promises";
 import path from "path";
 import dayjs from "dayjs";
-import { ANTHROPIC_API_KEY } from "../config.js";
+import { ANTHROPIC_API_KEY, CRM_DIGEST_AI_DISABLED } from "../config.js";
 import { TEMPERATURES, gradeByRules, applyStalenessCap, daysBetween, truncate } from "./crmDigest.js";
 
 const GRADING_MODEL = "claude-haiku-5-5";
@@ -19,7 +21,12 @@ const COMMENTS_PER_CARD = 5;
 const CACHE_MAX_AGE_DAYS = 7;
 const CACHE_PATH = path.join(process.cwd(), "data", "crm_grade_cache.json");
 
-const anthropic = ANTHROPIC_API_KEY ? new Anthropic({ apiKey: ANTHROPIC_API_KEY }) : null;
+/** Czy ocena przez Claude jest włączona: jest klucz API i nie wyłączono jej CRM_DIGEST_AI=0. */
+export function aiGradingConfigured(apiKey = ANTHROPIC_API_KEY, disabled = CRM_DIGEST_AI_DISABLED) {
+  return Boolean(apiKey) && !disabled;
+}
+
+const anthropic = aiGradingConfigured() ? new Anthropic({ apiKey: ANTHROPIC_API_KEY }) : null;
 
 const GradeSchema = z.object({
   oceny: z.array(
@@ -185,15 +192,17 @@ function cacheKey(entry) {
 
 /**
  * Ocenia karty: najpierw cache, potem Claude Haiku w paczkach, a dla tego,
- * czego nie udało się ocenić - reguły. Zwraca mapę id karty → ocena
- * { temperature, reason, nextStep, lost, source }.
+ * czego nie udało się ocenić - reguły. Zwraca { grades, aiError }: grades to
+ * mapa id karty → { temperature, reason, nextStep, lost, source }, aiError to
+ * krótki opis błędu Claude (do stopki przeglądu) albo null.
  * @param {Array} entries - karty z prepareEntries (tylko oceniane listy)
  * @param {object} [options]
- * @param {boolean} [options.useAi=true]
+ * @param {boolean} [options.useAi=true] - false wymusza reguły nawet przy włączonym CRM_DIGEST_AI
  * @param {string} [options.cachePath] - plik cache (domyślnie data/crm_grade_cache.json)
  */
 export async function gradeEntries(entries, now, { useAi = true, cachePath = CACHE_PATH } = {}) {
   const grades = {};
+  let aiError = null;
   const cache = await loadCache(cachePath);
   const freshCache = {};
   const toGrade = [];
@@ -228,6 +237,9 @@ export async function gradeEntries(entries, now, { useAi = true, cachePath = CAC
         }
       } catch (err) {
         console.error(`🚨 Ocena leadów przez Claude nie powiodła się (paczka ${i / BATCH_SIZE + 1}):`, err.message);
+        aiError = err instanceof Anthropic.APIError && err.status ? `HTTP ${err.status}` : "błąd odpowiedzi";
+        // Zły / wygasły klucz albo brak uprawnień - kolejne paczki skończą się tak samo.
+        if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) break;
       }
     }
   }
@@ -238,5 +250,5 @@ export async function gradeEntries(entries, now, { useAi = true, cachePath = CAC
 
   // Zapisujemy tylko oceny kart widzianych w tym przebiegu - reszta wypada.
   await saveCache(freshCache, cachePath);
-  return grades;
+  return { grades, aiError };
 }

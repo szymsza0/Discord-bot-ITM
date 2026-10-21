@@ -6,6 +6,9 @@ export const TRELLO_KEY = process.env.TRELLO_KEY;
 export const TRELLO_TOKEN = process.env.TRELLO_TOKEN;
 export const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 export const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+// Ocena "temperatury" leadów w porannym przeglądzie CRM przez Claude Haiku działa,
+// gdy jest ANTHROPIC_API_KEY; CRM_DIGEST_AI=0 ją wyłącza (zostają reguły słów kluczowych).
+export const CRM_DIGEST_AI_DISABLED = process.env.CRM_DIGEST_AI === "0";
 export const ALLOWED_GUILD_ID = process.env.ALLOWED_GUILD_ID;
 // Kanał porannego przeglądu CRM (dni robocze 07:30, patrz runScheduledDiscovery)
 export const DISCOVERY_CHANNEL_ID = process.env.DISCOVERY_CHANNEL_ID;

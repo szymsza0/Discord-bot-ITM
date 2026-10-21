@@ -31,7 +31,7 @@ import {
   cardLabel,
   cardCreatedAt,
 } from "../src/utils/crmDigest.js";
-import { gradeEntries } from "../src/utils/leadGrader.js";
+import { gradeEntries, aiGradingConfigured } from "../src/utils/leadGrader.js";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -326,6 +326,16 @@ describe("findDataWarnings", () => {
     assert.deepEqual(byKey.fv, ["Stara faktura"]);
     assert.deepEqual(byKey.won, ["Marta Zielińska (AL)"]);
   });
+  test("zimne leady bez terminu tylko jako licznik", () => {
+    const warm = entry({ name: "Ciepła bez terminu", due: null });
+    const cold = entry({ name: "Zimna bez terminu", due: daysAgo(40), dueComplete: true });
+    const grades = { [warm.id]: { temperature: "ciepły" }, [cold.id]: { temperature: "zimny" } };
+    const due = findDataWarnings([warm, cold], grades, NOW).find((w) => w.key === "due");
+    assert.deepEqual(due.items.map((i) => i.name), ["Ciepła bez terminu"]);
+    assert.match(due.note, /\+ 1 zimnych bez terminu/);
+    const field = buildDigestMessage(digestWith([warm, cold], { [warm.id]: grade("ciepły"), [cold.id]: grade("zimny") })).embeds[0].fields.find((f) => f.name.startsWith("⚠️"));
+    assert.match(field.value, /Ciepła bez terminu · \+ 1 zimnych bez terminu/);
+  });
   test("'lost' w Ponownym Kontakcie to świadome odłożenie - bez ostrzeżenia", () => {
     const parked = entry({ role: "recontact", listName: "Ponowny Kontakt", due: daysAhead(15) });
     const warnings = findDataWarnings([parked], { [parked.id]: { temperature: "zimny", lost: true } }, NOW);
@@ -436,6 +446,11 @@ describe("buildDigestMessage", () => {
     assert.match(embed.description, /Chłodne i zimne \(1\).*Celina Zimna \(AL\)/);
     assert.ok(!/\[Celina/.test(embed.description), "zimne bez linków");
   });
+  test("błąd Claude widać w stopce", () => {
+    const e = entry();
+    const d = digestWith([e], { [e.id]: grade("ciepły", { source: "reguły" }) }, { aiError: "HTTP 401" });
+    assert.match(buildDigestMessage(d).embeds[0].footer.text, /Claude niedostępny \(HTTP 401\)/);
+  });
   test("błąd pobierania = ⚠️ Dane niepełne, a nie 'brak wyników'", () => {
     const d = digestWith([], {}, { errors: ["lista „Oferta wysłana”"] });
     const msg = buildDigestMessage(d);
@@ -511,10 +526,17 @@ describe("pomocnicze", () => {
 });
 
 describe("gradeEntries", () => {
+  test("Claude ocenia tylko z kluczem API i bez CRM_DIGEST_AI=0", () => {
+    assert.equal(aiGradingConfigured("klucz", false), true);
+    assert.equal(aiGradingConfigured("klucz", true), false);
+    assert.equal(aiGradingConfigured("", false), false);
+    assert.equal(aiGradingConfigured(null, false), false);
+  });
   test("bez Claude ocenia regułami i zapisuje cache tylko z kart z przebiegu", async () => {
     const cachePath = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "crm-cache-")), "cache.json");
     const e = entry({ comments: [comment("rezygnuje")] });
-    const grades = await gradeEntries([e], NOW, { useAi: false, cachePath });
+    const { grades, aiError } = await gradeEntries([e], NOW, { useAi: false, cachePath });
+    assert.equal(aiError, null);
     assert.equal(grades[e.id].source, "reguły");
     assert.equal(grades[e.id].lost, true);
   });
@@ -530,10 +552,10 @@ describe("gradeEntries", () => {
         },
       })
     );
-    const grades = await gradeEntries([e], NOW, { useAi: false, cachePath });
+    const { grades } = await gradeEntries([e], NOW, { useAi: false, cachePath });
     assert.equal(grades[e.id].temperature, "gorący");
     assert.equal(grades[e.id].source, "Claude (cache)");
-    const changed = await gradeEntries([{ ...e, dateLastActivity: daysAgo(0) }], NOW, { useAi: false, cachePath });
+    const { grades: changed } = await gradeEntries([{ ...e, dateLastActivity: daysAgo(0) }], NOW, { useAi: false, cachePath });
     assert.equal(changed[e.id].source, "reguły");
   });
 });

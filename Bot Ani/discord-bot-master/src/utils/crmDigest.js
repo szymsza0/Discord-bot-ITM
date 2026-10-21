@@ -554,6 +554,8 @@ export function hasProjektyCard(entry, projektyCards = []) {
 export function findDataWarnings(entries, grades, now, { projektyCards = null } = {}) {
   const noOwner = [];
   const noDue = [];
+  // Zimne leady bez terminu są już na liście zimnych - tu tylko licznik.
+  let coldNoDue = 0;
   const lostInActive = [];
   const staleInvoice = [];
   const wonWithoutProjekty = [];
@@ -565,7 +567,8 @@ export function findDataWarnings(entries, grades, now, { projektyCards = null } 
       const term = e.role === "meeting" ? latestMeetingTerm(e.comments) : null;
       const knownMeeting = term && !term.isBefore(dayjs(now).tz(TZ).startOf("day"));
       if (e.role !== "invoice" && (!e.due || e.dueComplete) && !knownMeeting) {
-        noDue.push({ name: e.name, url: e.url, detail: e.listName });
+        if (grades[e.id]?.temperature === "zimny") coldNoDue += 1;
+        else noDue.push({ name: e.name, url: e.url, detail: e.listName });
       }
     }
     const grade = grades[e.id];
@@ -604,8 +607,13 @@ export function findDataWarnings(entries, grades, now, { projektyCards = null } 
     { key: "fv", label: `Fv poszła dłużej niż ${FV_STALE_DAYS} dni`, items: staleInvoice },
     { key: "won", label: `Won bez karty w Projektach (po ${WON_PROJEKTY_GRACE_DAYS} dniach)`, items: wonWithoutProjekty },
     { key: "owner", label: "Bez opiekuna", items: noOwner },
-    { key: "due", label: "Bez terminu kolejnego kroku", items: noDue },
-  ].filter((w) => w.items.length > 0);
+    {
+      key: "due",
+      label: "Bez terminu kolejnego kroku",
+      items: noDue,
+      note: coldNoDue ? `+ ${coldNoDue} zimnych bez terminu (do Lost albo Ponowny Kontakt)` : "",
+    },
+  ].filter((w) => w.items.length > 0 || w.note);
 }
 
 // ── Spotkania ────────────────────────────────────────────────────────────────
@@ -640,8 +648,9 @@ export function findUpcomingMeetings(entries, now) {
  * @param {Object<string, object>} params.grades - id karty → ocena
  * @param {string[]} params.errors - czego nie udało się pobrać
  * @param {Array|null} params.projektyCards - null, gdy nie udało się pobrać
+ * @param {string|null} params.aiError - błąd oceny przez Claude (ocena spadła na reguły)
  */
-export function assembleDigest({ entries, excluded = [], grades, errors = [], projektyCards = null, now }) {
+export function assembleDigest({ entries, excluded = [], grades, errors = [], projektyCards = null, aiError = null, now }) {
   const graded = entries
     .filter((e) => GRADED_ROLES.includes(e.role))
     .map((e) => ({ ...e, grade: grades[e.id] }))
@@ -685,7 +694,7 @@ export function assembleDigest({ entries, excluded = [], grades, errors = [], pr
     ads: { newCount: adsNew.length, waiting: adsWaiting, stale: adsStale, total: ads.length },
     invoices,
     warnings: findDataWarnings(entries, grades, now, { projektyCards }),
-    stats: { graded: graded.length, sources, excludedFachowcy: excluded.length },
+    stats: { graded: graded.length, sources, excludedFachowcy: excluded.length, aiError },
   };
 }
 
@@ -851,13 +860,13 @@ export function buildDigestMessage(digest, { mentions = "" } = {}) {
     });
   }
   if (digest.warnings.length) {
-    const count = digest.warnings.reduce((n, w) => n + w.items.length, 0);
+    const count = digest.warnings.reduce((n, w) => n + w.items.length, 0) || "";
     // "lost" w aktywnej liście i Won bez Projektów to konkretne karty do
     // ruszenia - dostają więcej miejsca i linki (pierwsze 3), reszta same nazwy.
-    const shares = { lost: 3, won: 2 };
+    const shares = { lost: 3, won: 2, due: 2 };
     const totalShares = digest.warnings.reduce((n, w) => n + (shares[w.key] || 1), 0);
     fields.push({
-      name: `⚠️ Do poprawy w Trello (${count})`,
+      name: `⚠️ Do poprawy w Trello${count ? ` (${count})` : ""}`,
       value: truncate(
         digest.warnings
           .map((w) => {
@@ -867,7 +876,8 @@ export function buildDigestMessage(digest, { mentions = "" } = {}) {
             const items = w.items.map((i, index) =>
               linked && index < 3 ? `${cardLink(i, 28)} (${i.detail})` : cardLabel(i.name, 26)
             );
-            return head + fitLines(items, Math.max(room, 40), ", ");
+            const note = w.note ? `${items.length ? " · " : ""}${w.note}` : "";
+            return head + fitLines(items, Math.max(room - note.length, 40), ", ") + note;
           })
           .join("\n"),
         LIMITS.field
@@ -902,13 +912,17 @@ export function buildDigestMessage(digest, { mentions = "" } = {}) {
     });
   }
 
-  const { graded, sources, excludedFachowcy } = digest.stats;
+  const { graded, sources, excludedFachowcy, aiError } = digest.stats;
   const footerParts = [];
   if (graded) {
     const how = Object.entries(sources)
       .map(([source, n]) => `${source}: ${n}`)
       .join(", ");
     footerParts.push(`Ocenione leady: ${graded} (${how})`);
+  }
+  if (aiError) {
+    const allRules = Object.keys(sources).every((source) => source === "reguły");
+    footerParts.push(`⚠️ Claude niedostępny (${aiError}) - ${allRules ? "ocena regułami" : "część ocen z reguł"}`);
   }
   footerParts.push(`tylko ITM Beauty${excludedFachowcy ? `, pominięto fachowców: ${excludedFachowcy}` : ""}`);
 
