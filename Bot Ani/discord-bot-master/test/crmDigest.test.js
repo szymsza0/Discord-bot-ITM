@@ -352,9 +352,17 @@ describe("findDataWarnings", () => {
     const won = entry({ role: "won", listName: "Won", enteredListAt: daysAgo(5) });
     assert.equal(findDataWarnings([won], {}, NOW, { projektyCards: null }).length, 0);
   });
-  test("hasProjektyCard dopasowuje po nazwisku", () => {
+  test("hasProjektyCard dopasowuje po nazwisku, nie po samym imieniu", () => {
     assert.ok(hasProjektyCard({ name: "Marta Zielińska (AL)", desc: "" }, [{ name: "Studio Marta Zielinska", desc: "" }]));
     assert.equal(hasProjektyCard({ name: "Marta Zielińska (AL)", desc: "" }, [{ name: "Inny klient", desc: "" }]), false);
+    assert.equal(hasProjektyCard({ name: "Marta Zielińska (AL)", desc: "" }, [{ name: "Marta Nowak", desc: "" }]), false);
+  });
+  test("Won z własną tablicą klienta nie jest ostrzeżeniem", () => {
+    const kaja = entry({ name: "Kaja Mysłakowska-Polak", role: "won", listName: "Won", enteredListAt: daysAgo(33) });
+    const boards = [{ name: "[AD] Art&Derm Kaja Mysłakowska", closed: false }];
+    assert.equal(findDataWarnings([kaja], {}, NOW, { projektyCards: [], boards }).length, 0);
+    const w = findDataWarnings([kaja], {}, NOW, { projektyCards: [], boards: [] });
+    assert.match(w[0].label, /^Won - sprawdź/);
   });
 });
 

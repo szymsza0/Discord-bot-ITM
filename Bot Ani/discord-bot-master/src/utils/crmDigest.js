@@ -522,15 +522,22 @@ function phonesIn(text) {
     .filter(Boolean);
 }
 
-function nameKeys(name) {
+// Słowa z nazwy karty do szukania klienta po nazwie: bez słów ogólnych, a przy
+// kilku słowach bez pierwszego (zwykle imię - "Anna" pasowałaby do wielu kart).
+export function nameKeys(name) {
   const skip = new Set([
     "meta", "itmb", "pani", "salon", "studio", "beauty", "kosmetolog", "kosmetologia",
     "estetyczna", "szkolenia", "makijaz", "permanentny", "kampania", "start",
   ]);
-  return normalizeName(name)
+  const words = normalizeName(String(name || "").replace(/[-–]/g, " "))
     .split(/\s+/)
-    .filter((w) => w.length >= 4 && !skip.has(w))
-    .slice(-2);
+    .filter((w) => w.length >= 4 && !skip.has(w));
+  return words.length > 1 ? words.slice(1) : words;
+}
+
+function matchesName(keys, text) {
+  const haystack = normalizeName(String(text || "").replace(/[-–]/g, " "));
+  return keys.some((k) => new RegExp(`\\b${k}\\b`).test(haystack));
 }
 
 /** Czy wygrana karta CRM ma odpowiednik na tablicy Projekty (telefon albo nazwisko). */
@@ -541,9 +548,14 @@ export function hasProjektyCard(entry, projektyCards = []) {
     const desc = p.desc || "";
     const digits = desc.replace(/\D/g, "");
     if (phones.some((ph) => digits.includes(ph))) return true;
-    const haystack = `${normalizeName(p.name)} ${normalizeName(desc.slice(0, 500))}`;
-    return keys.some((k) => new RegExp(`\\b${k}\\b`).test(haystack));
+    return matchesName(keys, `${p.name} ${desc.slice(0, 500)}`);
   });
+}
+
+/** Czy klient ma własną tablicę w Trello (np. "[AD] Art&Derm Kaja Mysłakowska"). */
+export function hasClientBoard(entry, boards = []) {
+  const keys = nameKeys(entry.name);
+  return boards.some((b) => !b.closed && matchesName(keys, b.name));
 }
 
 // ── Ostrzeżenia o danych ─────────────────────────────────────────────────────
@@ -551,7 +563,7 @@ export function hasProjektyCard(entry, projektyCards = []) {
 /**
  * @returns {Array<{ key: string, label: string, items: Array<{name, url, detail?}> }>}
  */
-export function findDataWarnings(entries, grades, now, { projektyCards = null } = {}) {
+export function findDataWarnings(entries, grades, now, { projektyCards = null, boards = null } = {}) {
   const noOwner = [];
   const noDue = [];
   // Zimne leady bez terminu są już na liście zimnych - tu tylko licznik.
@@ -595,7 +607,8 @@ export function findDataWarnings(entries, grades, now, { projektyCards = null } 
         !atLeast &&
         days >= WON_PROJEKTY_GRACE_DAYS &&
         days <= WON_PROJEKTY_LOOKBACK_DAYS &&
-        !hasProjektyCard(e, projektyCards)
+        !hasProjektyCard(e, projektyCards) &&
+        !hasClientBoard(e, boards || [])
       ) {
         wonWithoutProjekty.push({ name: e.name, url: e.url, detail: `Won od ${days} dni` });
       }
@@ -605,7 +618,11 @@ export function findDataWarnings(entries, grades, now, { projektyCards = null } 
   return [
     { key: "lost", label: "Komentarz mówi „lost”, a karta wisi w aktywnej liście", items: lostInActive },
     { key: "fv", label: `Fv poszła dłużej niż ${FV_STALE_DAYS} dni`, items: staleInvoice },
-    { key: "won", label: `Won bez karty w Projektach (po ${WON_PROJEKTY_GRACE_DAYS} dniach)`, items: wonWithoutProjekty },
+    {
+      key: "won",
+      label: `Won - sprawdź kartę w Projektach / tablicę klienta (brak po ${WON_PROJEKTY_GRACE_DAYS} dniach)`,
+      items: wonWithoutProjekty,
+    },
     { key: "owner", label: "Bez opiekuna", items: noOwner },
     {
       key: "due",
@@ -648,9 +665,19 @@ export function findUpcomingMeetings(entries, now) {
  * @param {Object<string, object>} params.grades - id karty → ocena
  * @param {string[]} params.errors - czego nie udało się pobrać
  * @param {Array|null} params.projektyCards - null, gdy nie udało się pobrać
+ * @param {Array|null} params.boards - tablice Trello (tablice klientów), null gdy nie pobrano
  * @param {string|null} params.aiError - błąd oceny przez Claude (ocena spadła na reguły)
  */
-export function assembleDigest({ entries, excluded = [], grades, errors = [], projektyCards = null, aiError = null, now }) {
+export function assembleDigest({
+  entries,
+  excluded = [],
+  grades,
+  errors = [],
+  projektyCards = null,
+  boards = null,
+  aiError = null,
+  now,
+}) {
   const graded = entries
     .filter((e) => GRADED_ROLES.includes(e.role))
     .map((e) => ({ ...e, grade: grades[e.id] }))
@@ -693,7 +720,7 @@ export function assembleDigest({ entries, excluded = [], grades, errors = [], pr
     meetings: findUpcomingMeetings(entries, now),
     ads: { newCount: adsNew.length, waiting: adsWaiting, stale: adsStale, total: ads.length },
     invoices,
-    warnings: findDataWarnings(entries, grades, now, { projektyCards }),
+    warnings: findDataWarnings(entries, grades, now, { projektyCards, boards }),
     stats: { graded: graded.length, sources, excludedFachowcy: excluded.length, aiError },
   };
 }

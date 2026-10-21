@@ -423,11 +423,13 @@ export async function loadCrmSnapshot(now = dayjs()) {
   const crmLists = lists.filter((l) => !l.closed && listRole(l.name));
   const since = dayjs(now).subtract(ACTIONS_HISTORY_DAYS, "day").toISOString();
 
-  const [labels, members, actions, projektyCards, ...cardsPerList] = await Promise.all([
+  const [labels, members, actions, projektyCards, boards, ...cardsPerList] = await Promise.all([
     attempt("etykiety (filtr fachowców)", () => trelloGetStrict(`boards/${board.id}/labels`, { fields: "name", limit: 1000 }), []),
     attempt("członkowie tablicy", () => trelloGetStrict(`boards/${board.id}/members`, { fields: "fullName,username" }), []),
     attempt("komentarze i historia kart", () => fetchBoardActions(board.id, { filter: "commentCard,updateCard:idList", since }), []),
     attempt("tablica [[ C-Level ]] Projekty", () => trelloGetStrict(`boards/${PROJEKTY_BOARD_ID}/cards/all`, { fields: "name,desc,closed" }), null),
+    // Część klientów ma własną tablicę zamiast karty w Projektach.
+    attempt("lista tablic klientów", () => trelloGetStrict("members/me/boards", { fields: "name,closed" }), null),
     ...crmLists.map((list) =>
       attempt(`lista „${list.name}”`, () => fetchListCards(list.id, { throwOnError: true, fields: `${LIST_CARD_FIELDS},desc` }), [])
     ),
@@ -440,6 +442,7 @@ export async function loadCrmSnapshot(now = dayjs()) {
     members,
     actions,
     projektyCards,
+    boards,
     cards: cardsPerList.flat(),
     historySince: since,
     errors,
@@ -469,6 +472,7 @@ export async function buildCrmDigest({ now = dayjs().tz(TZ), snapshot = null, us
     grades,
     errors: data.errors || [],
     projektyCards: data.projektyCards,
+    boards: data.boards || null,
     aiError,
     now,
   });
@@ -476,10 +480,31 @@ export async function buildCrmDigest({ now = dayjs().tz(TZ), snapshot = null, us
 }
 
 /**
+ * Buduje poranny przegląd i gotową wiadomość dla kanału, z wzmiankami osób,
+ * które mają dziś coś do zrobienia (rozwiązane na serwerze kanału). Nic nie
+ * wysyła. Rzuca, gdy nie da się pobrać danych z Trello.
+ * @returns {Promise<{content: string, embeds: object[]} | null>} null = nie ma czego wysłać
+ */
+export async function prepareCrmDigestMessage(channel, { now = dayjs().tz(TZ) } = {}) {
+  const { digest, snapshot } = await buildCrmDigest({ now });
+  const members = snapshot.members || [];
+  const setter = members.find((m) =>
+    normalizeName(m.fullName || m.username || "").includes(normalizeName(SETTER_NAME))
+  );
+  const mentionIds = peopleToMention(digest, { setterId: setter?.id || null });
+  const mentions = [];
+  for (const id of mentionIds) {
+    const member = members.find((m) => m.id === id);
+    if (member) mentions.push(await resolveMentionPrefix(channel.guild, member));
+  }
+  return buildDigestMessage(digest, { mentions: mentions.join(" ") });
+}
+
+/**
  * Codzienny poranny przegląd CRM (patrz cron w src/index.js): JEDNA
  * wiadomość na DISCOVERY_CHANNEL_ID z leadami ITM Beauty pogrupowanymi wg
- * temperatury, spotkaniami na jutro i brakami w danych. W weekend i gdy nie
- * ma czego pokazać - nic nie wysyła.
+ * temperatury, spotkaniami na dziś i jutro i brakami w danych. W weekend i
+ * gdy nie ma czego pokazać - nic nie wysyła.
  */
 export async function runScheduledDiscovery(client) {
   const now = dayjs().tz(TZ);
@@ -498,9 +523,9 @@ export async function runScheduledDiscovery(client) {
   });
   if (!channel) return;
 
-  let result;
+  let message;
   try {
-    result = await buildCrmDigest({ now });
+    message = await prepareCrmDigestMessage(channel, { now });
   } catch (err) {
     console.error("🚨 Poranny przegląd CRM: błąd budowania przeglądu:", err);
     await channel
@@ -516,19 +541,6 @@ export async function runScheduledDiscovery(client) {
     return;
   }
 
-  const { digest, snapshot } = result;
-  const members = snapshot.members || [];
-  const setter = members.find((m) =>
-    normalizeName(m.fullName || m.username || "").includes(normalizeName(SETTER_NAME))
-  );
-  const mentionIds = peopleToMention(digest, { setterId: setter?.id || null });
-  const mentions = [];
-  for (const id of mentionIds) {
-    const member = members.find((m) => m.id === id);
-    if (member) mentions.push(await resolveMentionPrefix(channel.guild, member));
-  }
-
-  const message = buildDigestMessage(digest, { mentions: mentions.join(" ") });
   if (!message) return;
   await channel.send(message);
 }
