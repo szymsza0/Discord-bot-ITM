@@ -238,7 +238,7 @@
   .zl-page .wpcf7 .wpcf7-list-item{display:block;margin:8px 0 0 !important}
   .zl-page .wpcf7 .wpcf7-list-item-label{font-weight:500;font-size:15.5px}
   .zl-page .wpcf7 input[type="checkbox"],.zl-page .wpcf7 input[type="radio"]{accent-color:var(--zl-mauve-deep);width:18px;height:18px;margin-right:8px;vertical-align:-3px}
-  .zl-page .wpcf7 input[type="submit"],.zl-page .wpcf7 button,.zl-page .wpcf7 .wpcf7-submit{display:block;width:100% !important;min-height:60px;padding:16px 24px !important;margin-top:10px;background:var(--zl-mauve-deep) !important;color:#FFFFFF !important;border:2px solid var(--zl-mauve-deep) !important;border-radius:14px !important;box-shadow:0 8px 22px rgba(58,42,32,.16) !important;font-family:'Inter',sans-serif !important;font-size:18px !important;font-weight:700 !important;cursor:pointer;opacity:1 !important;transition:background .2s ease,transform .2s ease}
+  .zl-page .wpcf7 input[type="submit"],.zl-page .wpcf7 button[type="submit"],.zl-page .wpcf7 .wpcf7-submit{display:block;width:100% !important;min-height:60px;padding:16px 24px !important;margin-top:10px;background:var(--zl-mauve-deep) !important;color:#FFFFFF !important;border:2px solid var(--zl-mauve-deep) !important;border-radius:14px !important;box-shadow:0 8px 22px rgba(58,42,32,.16) !important;font-family:'Inter',sans-serif !important;font-size:18px !important;font-weight:700 !important;cursor:pointer;opacity:1 !important;transition:background .2s ease,transform .2s ease}
   .zl-page .wpcf7 input[type="submit"]:hover,.zl-page .wpcf7 .wpcf7-submit:hover{background:var(--zl-mauve-dark) !important;border-color:var(--zl-mauve-dark) !important;transform:translateY(-2px)}
   .zl-page .wpcf7 .wpcf7-acceptance .wpcf7-list-item-label{color:var(--zl-ink-soft) !important;font-size:13px !important;font-weight:400 !important}
   .zl-page .wpcf7-response-output{color:var(--zl-ink) !important;border-radius:10px;font-size:14px}
@@ -248,6 +248,14 @@
     .zl-page .wpcf7 input:not([type="submit"]):not([type="checkbox"]):not([type="radio"]),.zl-page .wpcf7 textarea,.zl-page .wpcf7 select{min-height:54px;font-size:16px !important}
   }
   /* przyciski kroków formularza (snippet [ALL] Formularz krok po kroku) w jednym rzędzie */
+  /* nawigacja krokow (snippet WPCode 2009 "[ALL] Formularz krok po kroku"): Dalej na cala szerokosc, Wstecz jako link */
+  .zl-page .wpcf7 form .zls-nav{flex-flow:row nowrap;align-items:center;gap:14px;margin-top:8px}
+  .zl-page .wpcf7 .zl-cf7-field{margin:0 0 18px}
+  .zl-page .wpcf7 .hidden-fields-container{display:none !important;border:0;margin:0;padding:0}
+  .zl-page .wpcf7 .zl-lbl{display:block;font-weight:600;color:var(--zl-ink);margin-bottom:8px}
+  .zl-page .wpcf7 form .zls-nav .zls-next{flex:1 1 auto !important;width:auto !important;min-width:0 !important;min-height:58px;padding:14px 20px !important;white-space:nowrap !important;background:var(--zl-mauve-deep) !important;color:#fff !important;border:0 !important;border-radius:14px !important;font-family:'Inter',sans-serif !important;font-size:18px !important;font-weight:700 !important;box-shadow:0 8px 22px rgba(58,42,32,.16) !important}
+  .zl-page .wpcf7 form .zls-nav .zls-back{flex:0 0 auto !important;width:auto !important;min-height:0 !important;padding:10px 4px !important;white-space:nowrap !important;background:none !important;border:0 !important;box-shadow:none !important;color:var(--zl-ink-soft) !important;font-family:'Inter',sans-serif !important;font-size:15px !important;font-weight:600 !important;text-decoration:underline}
+  .zl-page .wpcf7 form .zls-nav .zls-back[hidden]{display:none !important}
   .zl-page .wpcf7 form .cf7mls-btns{display:flex !important;flex-flow:row nowrap !important;align-items:stretch !important;justify-content:space-between !important;gap:12px !important;width:100% !important}
   .zl-page .wpcf7 form .cf7mls-btns > *,.zl-page .wpcf7 form .cf7mls-btns input,.zl-page .wpcf7 form .cf7mls-btns button,.zl-page .wpcf7 form .cf7mls_back,.zl-page .wpcf7 form .cf7mls_next,.zl-page .wpcf7 form input[type="button"]{box-sizing:border-box !important;width:auto !important;min-width:0 !important;max-width:100% !important;flex:1 1 0 !important;white-space:nowrap !important;text-align:center !important;padding:16px 12px !important;line-height:1.3 !important}
   @media(max-width:560px){
@@ -344,7 +352,7 @@ document.documentElement.classList.add('zl-js');
       <p class="zl-sub">Zostaw kontakt. Oddzwonię, odpowiem na pytania i razem ustalimy, od czego zacząć terapię Twojej skóry.</p>
 
       <div class="zl-count-mini">
-        <span class="lbl">⏰ Oferta miesiąca kończy się za:</span>
+        <span class="lbl">⏰ Oferta kończy się za:</span>
         <span class="time" id="zl-time">--</span>
       </div>
 
@@ -558,27 +566,21 @@ document.documentElement.classList.add('zl-js');
 })();
 </script>
 
-<!-- COUNTDOWN do końca bieżącego miesiąca (realny termin oferty "w tym miesiącu") -->
+<!-- COUNTDOWN 15 minut (standard LP ITM) -->
 <script>
 (function(){
   var el=document.getElementById('zl-time');
   if(!el) return;
-  var now=new Date();
-  var end=new Date(now.getFullYear(), now.getMonth()+1, 1, 0, 0, 0).getTime();
-  function pad(x){ return String(x).padStart(2,'0'); }
+  var end=Date.now()+15*60*1000;
   function t(){
     var d=Math.max(0,end-Date.now());
-    var days=Math.floor(d/86400000);
-    var h=Math.floor(d/3600000)%24;
-    var m=Math.floor(d/60000)%60;
-    var s=Math.floor(d/1000)%60;
-    var txt=pad(h)+':'+pad(m)+':'+pad(s);
-    if(days>0){ txt=days+' d '+txt; }
-    el.textContent=txt;
-    if(d<=0){ clearInterval(iv); }
+    var m=String(Math.floor(d/60000)).padStart(2,'0');
+    var s=String(Math.floor(d/1000)%60).padStart(2,'0');
+    el.textContent=m+':'+s;
+    if(d<=0) clearInterval(iv);
   }
-  var iv=setInterval(t,1000);
   t();
+  var iv=setInterval(t,1000);
 })();
 </script>
 
