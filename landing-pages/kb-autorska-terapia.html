@@ -36,16 +36,18 @@
   .zl-page{font-family:'Inter',system-ui,sans-serif;background:var(--zl-cream);color:var(--zl-ink);line-height:1.65;font-size:17px;width:100vw;position:relative;left:50%;margin-left:-50vw}
   .zl-page *,.zl-page *::before,.zl-page *::after{box-sizing:border-box}
   .zl-page h1,.zl-page h2,.zl-page h3,.zl-serif{font-family:'Cormorant Garamond',serif;line-height:1.18;color:var(--zl-ink)}
-  .zl-page h2{font-size:clamp(30px,4.2vw,44px);font-weight:600}
+  .zl-page h2{font-size:clamp(30px,4.2vw,44px);font-weight:600;margin:0 !important}
+  .zl-page h3{margin-top:0 !important}
   .zl-page h3{font-size:23px;font-weight:600}
   .zl-page img{max-width:100%;display:block;border:none}
   .zl-page a{color:inherit}
   .zl-wrap{max-width:var(--zl-max);margin:0 auto;padding:0 22px}
-  .zl-page section{padding:76px 0}
+  .zl-page section{padding:54px 0;margin:0 !important}
+  @media(max-width:560px){.zl-page section{padding:40px 0}}
   .zl-center{text-align:center}
   .zl-sub{color:var(--zl-ink-soft);max-width:680px;margin:14px auto 0}
   .zl-eyebrow{display:inline-block;font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--zl-mauve-deep);font-weight:600;margin-bottom:14px}
-  .zl-divider{width:56px;height:3px;background:var(--zl-mauve);margin:0 auto 18px;border-radius:2px}
+  .zl-divider{width:56px;height:3px;background:var(--zl-mauve);margin:0 auto 14px !important;border-radius:2px}
   .zl-page button,.zl-page .zl-btn{text-transform:none !important;letter-spacing:normal !important}
   .zl-page ul{list-style:none;margin:0;padding:0}
 
@@ -91,7 +93,7 @@
   }
 
   /* HERO */
-  .zl-hero{padding:72px 0 84px;background:linear-gradient(180deg,var(--zl-cream) 0%,var(--zl-cream-2) 100%)}
+  .zl-hero{padding:48px 0 56px;background:linear-gradient(180deg,var(--zl-cream) 0%,var(--zl-cream-2) 100%)}
   .zl-hero__grid{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
   @media(max-width:900px){.zl-hero__grid{grid-template-columns:1fr}}
   .zl-hero h1{font-size:clamp(36px,4.8vw,56px);font-weight:600;margin:14px 0 18px}
@@ -118,7 +120,7 @@
   }
 
   /* CAROUSEL */
-  .zl-carousel{position:relative;margin-top:44px}
+  .zl-carousel{position:relative;margin-top:30px}
   .zl-track{display:flex;gap:22px;overflow-x:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;align-items:flex-start;padding:4px 2px 12px;scrollbar-width:thin}
   .zl-track.zl-snap{scroll-snap-type:x mandatory}
   .zl-track::-webkit-scrollbar-track{background:transparent}
@@ -147,8 +149,8 @@
   .zl-count-mini .time{font-family:'Inter',sans-serif;font-weight:700;font-size:22px;color:var(--zl-green);font-variant-numeric:tabular-nums;letter-spacing:.02em}
 
   /* OFFER */
-  .zl-two{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start;margin-top:34px;text-align:left}
-  @media(max-width:900px){.zl-two{grid-template-columns:1fr}}
+  .zl-two{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start;margin-top:26px;text-align:left}
+  @media(max-width:900px){.zl-two{grid-template-columns:1fr;gap:24px}}
   .zl-card{background:var(--zl-card);border-radius:var(--zl-radius);padding:28px;box-shadow:var(--zl-shadow);transition:transform .25s ease,box-shadow .25s ease}
   .zl-card:hover{transform:translateY(-5px);box-shadow:var(--zl-shadow-hover)}
   .zl-offer-checks{list-style:none;margin:6px 0 0}
@@ -162,7 +164,7 @@
   .zl-price .promo{display:block;margin-top:12px;color:var(--zl-green);font-weight:700;font-size:15.5px}
 
   /* WHY */
-  .zl-why__grid{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;margin-top:44px}
+  .zl-why__grid{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;margin-top:30px}
   @media(max-width:960px){.zl-why__grid{grid-template-columns:repeat(2,1fr)}}
   @media(max-width:560px){.zl-why__grid{grid-template-columns:1fr}}
   .zl-why .ico{width:54px;height:54px;border-radius:50%;background:var(--zl-beige-soft);color:var(--zl-mauve-deep);display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto 16px}
@@ -170,15 +172,15 @@
   .zl-why p{color:var(--zl-ink-soft);font-size:15px}
 
   /* O MNIE */
-  .zl-about{display:grid;grid-template-columns:.8fr 1.2fr;gap:48px;align-items:center;margin-top:40px;text-align:left}
-  @media(max-width:900px){.zl-about{grid-template-columns:1fr}}
+  .zl-about{display:grid;grid-template-columns:.8fr 1.2fr;gap:48px;align-items:center;margin-top:28px;text-align:left}
+  @media(max-width:900px){.zl-about{grid-template-columns:1fr;gap:26px}}
   .zl-about img{width:100%;max-width:360px;margin:0 auto;border-radius:24px;box-shadow:var(--zl-shadow);background:#fff}
   .zl-about ul{margin-top:18px}
   .zl-about li{padding:9px 0 9px 30px;position:relative;border-bottom:1px solid rgba(58,42,32,.08);color:var(--zl-ink)}
   .zl-about li::before{content:"✦";position:absolute;left:0;color:var(--zl-mauve-deep)}
 
   /* REVIEWS */
-  .zl-reviews__grid{column-count:3;column-gap:22px;margin-top:44px}
+  .zl-reviews__grid{column-count:3;column-gap:22px;margin-top:30px}
   @media(max-width:860px){.zl-reviews__grid{column-count:2}}
   @media(max-width:560px){.zl-reviews__grid{column-count:1}}
   .zl-reviews__grid > *{break-inside:avoid;-webkit-column-break-inside:avoid;display:inline-block;width:100%;margin:0 0 22px}
@@ -186,7 +188,7 @@
   .zl-review-shot:hover{transform:scale(1.02);box-shadow:var(--zl-shadow-hover)}
 
   /* FAQ */
-  .zl-faq-list{max-width:760px;margin:44px auto 0}
+  .zl-faq-list{max-width:760px;margin:30px auto 0}
   .zl-faq{background:var(--zl-card);border-radius:14px;box-shadow:var(--zl-shadow);margin-bottom:14px;overflow:hidden;transition:box-shadow .22s ease}
   .zl-faq:hover{box-shadow:var(--zl-shadow-hover)}
   .zl-faq summary{cursor:pointer;list-style:none;font-family:'Cormorant Garamond',serif;font-size:19px;font-weight:600;color:var(--zl-ink);padding:20px 56px 20px 24px;position:relative}
@@ -196,11 +198,11 @@
   .zl-faq .answer p{padding:0 24px 22px;color:var(--zl-ink-soft);font-size:15.5px}
 
   /* FINAL */
-  .zl-final{background:var(--zl-mauve-dark);color:#fff;padding:90px 0}
+  .zl-final{background:var(--zl-mauve-dark);color:#fff;padding:60px 0}
   .zl-final h2,.zl-final h3.zl-serif{color:#fff}
   .zl-final .zl-sub{color:var(--zl-beige-soft)}
-  .zl-final__grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start;margin-top:44px}
-  @media(max-width:900px){.zl-final__grid{grid-template-columns:1fr}}
+  .zl-final__grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start;margin-top:30px}
+  @media(max-width:900px){.zl-final__grid{grid-template-columns:1fr;gap:30px}}
   .zl-final .zl-eyebrow{color:var(--zl-beige)}
   .zl-contact{list-style:none;margin-top:22px}
   .zl-contact li{display:flex;gap:12px;align-items:center;margin-bottom:14px;font-size:16px}
@@ -290,9 +292,9 @@ document.documentElement.classList.add('zl-js');
         <span class="zl-hero__badge"><b>✦</b> Wrocław · Autorska terapia twarzy</span>
         <h1>Wyjdź z domu bez makijażu i <em>poczuj się pewnie we własnej skórze</em></h1>
         <p class="lead">
-          Autorska terapia twarzy na trądzik, przebarwienia i blizny potrądzikowe.
-          Jestem Kasia, kosmetolog z ponad 10-letnim doświadczeniem. Każdy plan dobieram
-          do skóry i trybu życia, bez obietnic cudów, za to z efektami, które widać.
+          Jestem Kasia i od ponad 10 lat pomagam kobietom znów dobrze czuć się we własnej skórze.
+          Trądzik, przebarwienia, blizny potrądzikowe: wiem, jak z nimi pracować, i dobiorę terapię
+          do Twojej skóry i trybu życia. Nie obiecuję cudów, obiecuję efekty, które zobaczysz w lustrze.
         </p>
         <div class="zl-rating"><span class="stars">★★★★★</span><span><b>5.0</b> · 97 opinii na Facebooku</span></div>
 
@@ -359,20 +361,21 @@ document.documentElement.classList.add('zl-js');
             <li>Powrót do obowiązków następnego dnia</li>
           </ul>
           <div class="zl-bonus">
-            ✦ <b>DLACZEGO KASIA?</b><br>
-            Ponad 10 lat praktyki i ponad 100 tys. zł zainwestowanych we własną edukację.
-            Certyfikowana kosmetolog ZENA, od 5 lat szkoli innych kosmetologów z zabiegów na blizny i trądzik.
+            ✦ <b>DLACZEGO ZE MNĄ?</b><br>
+            Od ponad 10 lat pracuję ze skórą i zainwestowałam ponad 100 tys. zł we własną edukację.
+            Jestem certyfikowaną kosmetolog ZENA, a od 5 lat uczę innych kosmetologów, jak pracować z bliznami i trądzikiem.
+            Wiem, co robię, i z przyjemnością przeprowadzę Cię przez całą terapię.
           </div>
           <div class="zl-price">
             <span class="old">Cena zabiegu: ok. 400 zł</span>
             <span class="new">+ zabieg niespodzianka GRATIS</span>
-            <span class="promo">Dla pierwszych 20 osób w tym miesiącu, do tego kosmetyki do regeneracji w prezencie.</span>
+            <span class="promo">Dla pierwszych 20 osób w tym miesiącu, do tego kosmetyki do regeneracji ode mnie w prezencie.</span>
           </div>
         </div>
 
         <div class="zl-form-box zl-reveal">
           <h3 class="zl-serif zl-center" style="margin-bottom:16px">Zostaw kontakt, oddzwonię</h3>
-          [contact-form-7 id="XXXXXXX" title="KB Autorska terapia"]
+          [contact-form-7 id="5618006" title="KB Autorska terapia"]
         </div>
       </div>
     </div>
@@ -397,13 +400,13 @@ document.documentElement.classList.add('zl-js');
   <section id="dlaczego">
     <div class="zl-wrap zl-center">
       <div class="zl-divider"></div>
-      <h2>Dlaczego autorska terapia?</h2>
-      <p class="zl-sub">Nie gotowy pakiet z katalogu, tylko plan ułożony pod konkretną skórę i konkretną osobę.</p>
+      <h2>Dlaczego warto przyjść do mnie?</h2>
+      <p class="zl-sub">Nie sprzedaję gotowych pakietów z katalogu. Układam plan pod Twoją skórę i pod Ciebie.</p>
       <div class="zl-why__grid zl-why">
         <div class="zl-card zl-reveal"><div class="ico">✦</div><h3>Indywidualny plan</h3><p>Dobieram metodę i preparaty do skóry, jej historii i Twojego dnia. Jeśli coś nie jest dla Ciebie, mówię o tym wprost.</p></div>
-        <div class="zl-card zl-reveal"><div class="ico">✨</div><h3>Efekt od pierwszej wizyty</h3><p>Pierwsze zmiany widać zwykle już po pierwszym zabiegu, a kolejne wizyty je pogłębiają.</p></div>
+        <div class="zl-card zl-reveal"><div class="ico">✨</div><h3>Efekt od pierwszej wizyty</h3><p>Pracuję tak, żeby pierwsze zmiany było widać już po pierwszym zabiegu. Kolejne wizyty je pogłębiają.</p></div>
         <div class="zl-card zl-reveal"><div class="ico">🌿</div><h3>Szybki powrót do życia</h3><p>Następnego dnia wracasz do swoich obowiązków. Na regenerację dostajesz ode mnie kosmetyki w prezencie.</p></div>
-        <div class="zl-card zl-reveal"><div class="ico">🤍</div><h3>Opieka na każdym etapie</h3><p>Tłumaczę, co robimy i dlaczego, a po zabiegu wiesz dokładnie, jak dbać o skórę w domu.</p></div>
+        <div class="zl-card zl-reveal"><div class="ico">🤍</div><h3>Jestem z Tobą na każdym etapie</h3><p>Tłumaczę, co robimy i dlaczego, a po zabiegu wiesz dokładnie, jak dbać o skórę w domu. Zawsze możesz do mnie napisać.</p></div>
       </div>
     </div>
   </section>
@@ -416,17 +419,19 @@ document.documentElement.classList.add('zl-js');
       <div class="zl-about">
         <img src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-kasia.jpg" alt="Katarzyna Brudniak, kosmetolog" loading="lazy">
         <div>
-          <h3 class="zl-serif">Katarzyna Brudniak, KATE My Beauty Space</h3>
+          <h3 class="zl-serif">Cześć, jestem Kasia</h3>
           <p style="margin-top:10px;color:var(--zl-ink-soft)">
-            Specjalizuję się w redukcji blizn i niedoskonałości skóry. Doskonale znam uczucie,
-            z którym przychodzą do mnie klientki, bo sama byłam w ich miejscu. Po latach praktyki
-            opracowałam własne metody zabiegowe, którymi dziś pracuję w gabinecie przy ul. Długiej we Wrocławiu.
+            Katarzyna Brudniak, KATE My Beauty Space. Specjalizuję się w redukcji blizn i niedoskonałości skóry.
+            Doskonale znam uczucie, z którym przychodzą do mnie klientki, bo sama byłam w ich miejscu. Dlatego tak ważne
+            jest dla mnie, żebyś czuła się u mnie bezpiecznie i swobodnie. Po latach praktyki opracowałam własne metody
+            zabiegowe i wiem, że działają: widzę to na twarzach moich klientek, a one piszą o tym w opiniach.
+            Zapraszam do mojego gabinetu przy ul. Długiej we Wrocławiu.
           </p>
           <ul>
-            <li>Ponad 10 lat doświadczenia</li>
-            <li>Ponad 100 tys. zł zainwestowanych we własną edukację</li>
-            <li>Certyfikowana kosmetolog ZENA</li>
-            <li>Od 5 lat szkoli kosmetologów z zabiegów na blizny i trądzik</li>
+            <li>Od ponad 10 lat pracuję ze skórą</li>
+            <li>Zainwestowałam ponad 100 tys. zł we własną edukację</li>
+            <li>Jestem certyfikowaną kosmetolog ZENA</li>
+            <li>Od 5 lat szkolę kosmetologów z zabiegów na blizny i trądzik</li>
           </ul>
         </div>
       </div>
@@ -438,14 +443,14 @@ document.documentElement.classList.add('zl-js');
     <div class="zl-wrap zl-center">
       <div class="zl-divider"></div>
       <h2>Co mówią moje klientki?</h2>
-      <p class="zl-sub">★★★★★ 5.0 · 97 opinii na Facebooku. Kilka z nich poniżej.</p>
+      <p class="zl-sub">Najlepiej powiedzą o tym same: ★★★★★ 5.0, 97 opinii na Facebooku. Kilka z nich poniżej.</p>
       <div class="zl-reviews__grid">
         <img class="zl-review-shot zl-reveal" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-opinia-1.jpg" alt="Opinia klientki o autorskiej terapii twarzy" loading="lazy">
-        <img class="zl-review-shot zl-reveal" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-opinia-2.jpg" alt="Opinia klientki o zabiegach u Kasi" loading="lazy">
-        <img class="zl-review-shot zl-reveal" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-opinia-3.jpg" alt="Opinia klientki o zabiegach u Kasi" loading="lazy">
-        <img class="zl-review-shot zl-reveal" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-opinia-4.jpg" alt="Opinia klientki o zabiegach u Kasi" loading="lazy">
-        <img class="zl-review-shot zl-reveal" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-opinia-5.jpg" alt="Opinia klientki o zabiegach u Kasi" loading="lazy">
-        <img class="zl-review-shot zl-reveal" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-opinia-6.jpg" alt="Opinia klienta o zabiegach u Kasi" loading="lazy">
+        <img class="zl-review-shot zl-reveal" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-opinia-2.jpg" alt="Opinia klientki o zabiegach w KATE My Beauty Space" loading="lazy">
+        <img class="zl-review-shot zl-reveal" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-opinia-3.jpg" alt="Opinia klientki o zabiegach w KATE My Beauty Space" loading="lazy">
+        <img class="zl-review-shot zl-reveal" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-opinia-4.jpg" alt="Opinia klientki o zabiegach w KATE My Beauty Space" loading="lazy">
+        <img class="zl-review-shot zl-reveal" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-opinia-5.jpg" alt="Opinia klientki o zabiegach w KATE My Beauty Space" loading="lazy">
+        <img class="zl-review-shot zl-reveal" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-opinia-6.jpg" alt="Opinia klienta o zabiegach w KATE My Beauty Space" loading="lazy">
       </div>
     </div>
   </section>
@@ -475,12 +480,12 @@ document.documentElement.classList.add('zl-js');
     <div class="zl-wrap">
       <div class="zl-center">
         <h2 class="zl-serif">Gotowa na skórę bez korektora?</h2>
-        <p class="zl-sub">Zostaw kontakt, a oddzwonię i umówimy konsultację w gabinecie.<br>Pierwsze 20 osób w tym miesiącu dostaje zabieg niespodziankę gratis.</p>
+        <p class="zl-sub">Zostaw kontakt, oddzwonię i umówimy się na konsultację w moim gabinecie.<br>Pierwsze 20 osób w tym miesiącu dostaje ode mnie zabieg niespodziankę gratis.</p>
       </div>
       <div class="zl-final__grid">
         <div>
           <span class="zl-eyebrow">Zrób coś dobrego dla swojej skóry</span>
-          <h3 class="zl-serif" style="font-size:32px">Autorska terapia twarzy we Wrocławiu</h3>
+          <h3 class="zl-serif" style="font-size:32px">Zapraszam do mojego gabinetu we Wrocławiu</h3>
           <ul class="zl-contact">
             <li><span class="dot"></span>KATE My Beauty Space · Katarzyna Brudniak</li>
             <li><span class="dot"></span><a href="tel:+48530824384">530 824 384</a></li>
@@ -494,7 +499,7 @@ document.documentElement.classList.add('zl-js');
         </div>
         <div class="zl-form-slot">
           <h3 class="zl-serif">Zostaw kontakt, oddzwonię</h3>
-          [contact-form-7 id="XXXXXXX" title="KB Autorska terapia"]
+          [contact-form-7 id="5618006" title="KB Autorska terapia"]
         </div>
       </div>
     </div>
