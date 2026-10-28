@@ -1,0 +1,607 @@
+<!-- wp:html -->
+<!--
+  LP: KATE My Beauty Space (Katarzyna Brudniak) - autorska terapia twarzy, Wrocław
+  Slug: kb-autorska-terapia
+  Oferta wg kampanii Meta act_975734334070318 "[KB] Autorska terapia twarzy | Leady | 10.2026":
+  zabieg niespodzianka GRATIS dla pierwszych 20 osób w miesiącu, kosmetyki do regeneracji w prezencie.
+  Brief: [KB] BRIEF POD KAMPANIĘ BEAUTY - AM. Media: Klienci Beauty/KB Katarzyna Brudniak/10.2026/strona_LP/do_wgrania_na_WP.
+  Formularz CF7: "KB Autorska terapia" (kod pól w cf7-formularz.txt). Webhook: webhook-snippet.js (WPCode, JavaScript).
+-->
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+  /* Paleta KB: mokka + pudrowy róż (jak kreacje kampanii) */
+  :root{
+    --zl-cream:#FBF6F1;
+    --zl-cream-2:#F4E9E0;
+    --zl-card:#FFFFFF;
+    --zl-ink:#2E221B;
+    --zl-ink-soft:#66554A;
+    --zl-mauve:#C99A86;
+    --zl-mauve-deep:#8A5442;
+    --zl-mauve-dark:#3A2A20;
+    --zl-beige:#E8D5C8;
+    --zl-beige-soft:#F6E7DD;
+    --zl-green:#9A4A35;
+    --zl-green-light:#FBEBE3;
+    --zl-radius:18px;
+    --zl-shadow:0 8px 30px rgba(58,42,32,.08);
+    --zl-shadow-hover:0 16px 44px rgba(58,42,32,.16);
+    --zl-max:1120px;
+  }
+
+  html{scroll-behavior:smooth}
+  body{overflow-x:hidden}
+
+  .zl-page{font-family:'Inter',system-ui,sans-serif;background:var(--zl-cream);color:var(--zl-ink);line-height:1.65;font-size:17px;width:100vw;position:relative;left:50%;margin-left:-50vw}
+  .zl-page *,.zl-page *::before,.zl-page *::after{box-sizing:border-box}
+  .zl-page h1,.zl-page h2,.zl-page h3,.zl-serif{font-family:'Cormorant Garamond',serif;line-height:1.18;color:var(--zl-ink)}
+  .zl-page h2{font-size:clamp(30px,4.2vw,44px);font-weight:600}
+  .zl-page h3{font-size:23px;font-weight:600}
+  .zl-page img{max-width:100%;display:block;border:none}
+  .zl-page a{color:inherit}
+  .zl-wrap{max-width:var(--zl-max);margin:0 auto;padding:0 22px}
+  .zl-page section{padding:76px 0}
+  .zl-center{text-align:center}
+  .zl-sub{color:var(--zl-ink-soft);max-width:680px;margin:14px auto 0}
+  .zl-eyebrow{display:inline-block;font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--zl-mauve-deep);font-weight:600;margin-bottom:14px}
+  .zl-divider{width:56px;height:3px;background:var(--zl-mauve);margin:0 auto 18px;border-radius:2px}
+  .zl-page button,.zl-page .zl-btn{text-transform:none !important;letter-spacing:normal !important}
+  .zl-page ul{list-style:none;margin:0;padding:0}
+
+  /* UKRYCIE ELEMENTÓW MOTYWU WORDPRESS */
+  #masthead,.site-header,#wrapnav,.site-main-header-wrap{display:none !important}
+  .entry-header,.site-hero,#inner-wrap .entry-title,.page-title,.kadence-breadcrumbs,.entry-hero,.entry-hero-container,.kadence-title-above,.titles-wrapper,.page-hero,header.entry-header,.kb-hero,.entry-hero-layout-standard,.wp-block-kadence-header,.kadence-hero-section,.entry-header-wrap,.above-title-content{display:none !important;height:0 !important;min-height:0 !important;padding:0 !important;margin:0 !important;border:0 !important}
+  .entry-content,.content-container,.site-container,article.entry,.single-content,.content-wrap{max-width:none !important;padding-left:0 !important;padding-right:0 !important;margin-left:0 !important;margin-right:0 !important}
+  .content-area,#primary,#main,.site-main,.entry-content-wrap,.single-content,.content-container,.hentry{padding-top:0 !important;margin-top:0 !important}
+
+  /* BUTTON */
+  .zl-btn{display:inline-block;background:var(--zl-mauve-deep);color:#fff !important;text-decoration:none !important;padding:16px 32px;border-radius:12px;font-weight:600;font-size:16px;border:none;cursor:pointer;transition:transform .22s ease,box-shadow .22s ease,background .22s ease}
+  .zl-btn:hover,.zl-btn:focus,.zl-btn:active{transform:translateY(-3px) scale(1.02);box-shadow:var(--zl-shadow-hover);background:var(--zl-mauve-dark);color:#fff !important}
+
+  /* NAV */
+  .zl-nav{position:sticky;top:0;z-index:50;background:rgba(251,246,241,.96);backdrop-filter:blur(8px);border-bottom:1px solid rgba(58,42,32,.10)}
+  .zl-nav__in{display:flex;align-items:center;justify-content:space-between;padding:10px 22px;max-width:var(--zl-max);margin:0 auto;min-height:74px}
+  .zl-brand{display:flex;align-items:center;gap:16px;text-decoration:none !important;color:var(--zl-ink);min-width:0}
+  .zl-brand-logo{width:54px;height:54px;object-fit:cover;object-position:50% 18%;flex:none;border-radius:50%;border:2px solid var(--zl-beige)}
+  .zl-brand-text{display:flex;align-items:center;flex-wrap:wrap;column-gap:11px;row-gap:2px;font-family:'Cormorant Garamond',serif;font-size:23px;line-height:1;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--zl-ink)}
+  .zl-brand-dot{font-family:'Inter',sans-serif;font-size:11px;color:var(--zl-mauve-deep);line-height:1}
+  .zl-brand-city{font-family:'Inter',sans-serif;font-size:11px;letter-spacing:.18em;font-weight:600;color:var(--zl-mauve-deep)}
+  .zl-nav__links{display:flex;gap:26px;align-items:center;list-style:none;margin:0}
+  .zl-nav__links a{text-decoration:none !important;font-size:15px;font-weight:500;color:var(--zl-ink-soft);transition:color .2s}
+  .zl-nav__links a:hover{color:var(--zl-mauve-deep)}
+  .zl-nav .zl-btn{padding:11px 20px;font-size:14.5px}
+  @media(max-width:840px){
+    .zl-nav__in{padding:9px 16px;min-height:70px}
+    .zl-brand{gap:10px}
+    .zl-brand-logo{width:46px;height:46px}
+    .zl-brand-text{font-size:18px;gap:7px;letter-spacing:.06em}
+    .zl-brand-dot{font-size:9px}
+    .zl-brand-city{font-size:9px;letter-spacing:.13em}
+    .zl-nav__links li:not(.zl-nav__cta){display:none}
+  }
+  @media(max-width:520px){
+    .zl-nav__in{padding:8px 12px}
+    .zl-brand{gap:8px}
+    .zl-brand-logo{width:42px;height:42px}
+    .zl-brand-text{font-size:15px;line-height:1.15;column-gap:5px;row-gap:3px}
+    .zl-brand-dot{font-size:7px}
+    .zl-brand-city{font-size:8px;letter-spacing:.1em}
+    .zl-nav .zl-btn{padding:9px 12px;font-size:12px}
+  }
+
+  /* HERO */
+  .zl-hero{padding:72px 0 84px;background:linear-gradient(180deg,var(--zl-cream) 0%,var(--zl-cream-2) 100%)}
+  .zl-hero__grid{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
+  @media(max-width:900px){.zl-hero__grid{grid-template-columns:1fr}}
+  .zl-hero h1{font-size:clamp(36px,4.8vw,56px);font-weight:600;margin:14px 0 18px}
+  .zl-hero h1 em{font-style:italic;color:var(--zl-mauve-deep)}
+  .zl-hero__badge{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--zl-beige);border-radius:999px;padding:8px 16px;font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--zl-ink-soft);font-weight:600}
+  .zl-hero__badge b{color:var(--zl-mauve-deep)}
+  .zl-hero p.lead{font-size:18.5px;color:var(--zl-ink-soft)}
+  .zl-rating{display:flex;align-items:center;gap:10px;margin-top:16px;font-size:15px;color:var(--zl-ink-soft);font-weight:500}
+  .zl-rating .stars{color:#D4A13D;letter-spacing:2px;font-size:18px}
+  .zl-rating b{color:var(--zl-ink)}
+
+  /* PROMOCJA */
+  .zl-hero__offer{margin:24px 0 28px;background:var(--zl-green-light);border:2px solid #E7C3B3;border-radius:14px;padding:18px 20px;color:var(--zl-ink)}
+  .zl-hero__offer-title{display:block;color:var(--zl-green);font-weight:800;font-size:14px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}
+  .zl-hero__offer-price{font-family:'Cormorant Garamond',serif;font-size:31px;line-height:1.1;font-weight:700;color:var(--zl-green)}
+  .zl-hero__offer-text{display:block;margin-top:5px;font-size:14px;color:var(--zl-ink-soft);font-weight:600}
+
+  /* FILM */
+  .zl-hero__media{position:relative;width:100%}
+  .zl-video{width:100%;max-width:400px;aspect-ratio:9/16;margin:0 auto;display:block;object-fit:cover;border-radius:24px;box-shadow:var(--zl-shadow);background:#EADCD1}
+  @media(max-width:900px){
+    .zl-hero__media{order:-1;margin:0 auto}
+    .zl-video{max-width:340px}
+  }
+
+  /* CAROUSEL */
+  .zl-carousel{position:relative;margin-top:44px}
+  .zl-track{display:flex;gap:22px;overflow-x:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;align-items:flex-start;padding:4px 2px 12px;scrollbar-width:thin}
+  .zl-track.zl-snap{scroll-snap-type:x mandatory}
+  .zl-track::-webkit-scrollbar-track{background:transparent}
+  .zl-track::-webkit-scrollbar-thumb{background:rgba(58,42,32,.22);border-radius:8px}
+  .zl-slide{flex:0 0 calc((100% - 44px)/3);scroll-snap-align:start}
+  @media(max-width:900px){.zl-slide{flex-basis:calc((100% - 22px)/2)}}
+  @media(max-width:560px){.zl-slide{flex-basis:100%}}
+  .zl-slide img{width:100%;height:360px;object-fit:contain;background:#fff;border-radius:16px;box-shadow:var(--zl-shadow);transition:transform .25s ease,box-shadow .25s ease}
+  @media(max-width:900px){.zl-slide img{height:320px}}
+  @media(max-width:560px){.zl-slide img{height:360px}}
+  .zl-slide img:hover{transform:scale(1.02);box-shadow:var(--zl-shadow-hover)}
+  .zl-slide b{display:block;margin-top:12px;text-align:center;color:var(--zl-mauve-deep);font-size:14px;letter-spacing:.08em}
+  .zl-arrow{position:absolute;top:42%;transform:translateY(-50%);z-index:5;width:46px;height:46px;border-radius:50%;background:var(--zl-mauve-deep);color:#fff;border:none;cursor:pointer;font-size:24px;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:var(--zl-shadow);transition:transform .2s ease,background .2s ease}
+  .zl-arrow:hover,.zl-arrow:focus{background:var(--zl-mauve-dark);transform:translateY(-50%) scale(1.06)}
+  .zl-arrow--prev{left:-10px}
+  .zl-arrow--next{right:-10px}
+  @media(max-width:560px){
+    .zl-arrow{width:40px;height:40px;font-size:20px}
+    .zl-arrow--prev{left:2px}
+    .zl-arrow--next{right:2px}
+  }
+
+  /* COUNTDOWN */
+  .zl-count-mini{display:inline-flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--zl-beige);border-radius:999px;padding:10px 22px;box-shadow:var(--zl-shadow);margin-top:18px;flex-wrap:wrap;justify-content:center}
+  .zl-count-mini .lbl{font-size:13.5px;color:var(--zl-ink-soft);font-weight:600}
+  .zl-count-mini .time{font-family:'Inter',sans-serif;font-weight:700;font-size:22px;color:var(--zl-green);font-variant-numeric:tabular-nums;letter-spacing:.02em}
+
+  /* OFFER */
+  .zl-two{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start;margin-top:34px;text-align:left}
+  @media(max-width:900px){.zl-two{grid-template-columns:1fr}}
+  .zl-card{background:var(--zl-card);border-radius:var(--zl-radius);padding:28px;box-shadow:var(--zl-shadow);transition:transform .25s ease,box-shadow .25s ease}
+  .zl-card:hover{transform:translateY(-5px);box-shadow:var(--zl-shadow-hover)}
+  .zl-offer-checks{list-style:none;margin:6px 0 0}
+  .zl-offer-checks li{display:flex;align-items:baseline;gap:10px;font-size:13.5px;letter-spacing:.04em;text-transform:uppercase;font-weight:600;color:var(--zl-ink);padding:10px 0;border-bottom:1px solid rgba(58,42,32,.08)}
+  .zl-offer-checks li::before{content:"✓";color:var(--zl-green);font-weight:700;flex:none}
+  .zl-bonus{margin:16px 0 0;background:var(--zl-green-light);border:1px solid var(--zl-beige);border-radius:14px;padding:16px 20px;font-size:14.5px;color:var(--zl-ink-soft)}
+  .zl-bonus b{color:var(--zl-green)}
+  .zl-price{margin-top:22px}
+  .zl-price .old{display:block;color:var(--zl-ink-soft);font-weight:600;font-size:16px;margin-bottom:6px}
+  .zl-price .new{display:block;font-family:'Cormorant Garamond',serif;font-size:38px;font-weight:700;color:var(--zl-green);margin-top:2px;line-height:1.15}
+  .zl-price .promo{display:block;margin-top:12px;color:var(--zl-green);font-weight:700;font-size:15.5px}
+
+  /* WHY */
+  .zl-why__grid{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;margin-top:44px}
+  @media(max-width:960px){.zl-why__grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:560px){.zl-why__grid{grid-template-columns:1fr}}
+  .zl-why .ico{width:54px;height:54px;border-radius:50%;background:var(--zl-beige-soft);color:var(--zl-mauve-deep);display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto 16px}
+  .zl-why h3{font-size:20px;margin-bottom:8px}
+  .zl-why p{color:var(--zl-ink-soft);font-size:15px}
+
+  /* O MNIE */
+  .zl-about{display:grid;grid-template-columns:.8fr 1.2fr;gap:48px;align-items:center;margin-top:40px;text-align:left}
+  @media(max-width:900px){.zl-about{grid-template-columns:1fr}}
+  .zl-about img{width:100%;max-width:360px;margin:0 auto;border-radius:24px;box-shadow:var(--zl-shadow);background:#fff}
+  .zl-about ul{margin-top:18px}
+  .zl-about li{padding:9px 0 9px 30px;position:relative;border-bottom:1px solid rgba(58,42,32,.08);color:var(--zl-ink)}
+  .zl-about li::before{content:"✦";position:absolute;left:0;color:var(--zl-mauve-deep)}
+
+  /* REVIEWS */
+  .zl-reviews__grid{column-count:3;column-gap:22px;margin-top:44px}
+  @media(max-width:860px){.zl-reviews__grid{column-count:2}}
+  @media(max-width:560px){.zl-reviews__grid{column-count:1}}
+  .zl-reviews__grid > *{break-inside:avoid;-webkit-column-break-inside:avoid;display:inline-block;width:100%;margin:0 0 22px}
+  .zl-review-shot{display:block;width:100%;height:auto;border-radius:16px;box-shadow:var(--zl-shadow);transition:transform .25s ease,box-shadow .25s ease}
+  .zl-review-shot:hover{transform:scale(1.02);box-shadow:var(--zl-shadow-hover)}
+
+  /* FAQ */
+  .zl-faq-list{max-width:760px;margin:44px auto 0}
+  .zl-faq{background:var(--zl-card);border-radius:14px;box-shadow:var(--zl-shadow);margin-bottom:14px;overflow:hidden;transition:box-shadow .22s ease}
+  .zl-faq:hover{box-shadow:var(--zl-shadow-hover)}
+  .zl-faq summary{cursor:pointer;list-style:none;font-family:'Cormorant Garamond',serif;font-size:19px;font-weight:600;color:var(--zl-ink);padding:20px 56px 20px 24px;position:relative}
+  .zl-faq summary::-webkit-details-marker{display:none}
+  .zl-faq summary::after{content:"+";position:absolute;right:22px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;background:var(--zl-beige-soft);color:var(--zl-mauve-deep);display:flex;align-items:center;justify-content:center;font-family:'Inter';font-size:18px}
+  .zl-faq[open] summary::after{content:"\2212"}
+  .zl-faq .answer p{padding:0 24px 22px;color:var(--zl-ink-soft);font-size:15.5px}
+
+  /* FINAL */
+  .zl-final{background:var(--zl-mauve-dark);color:#fff;padding:90px 0}
+  .zl-final h2,.zl-final h3.zl-serif{color:#fff}
+  .zl-final .zl-sub{color:var(--zl-beige-soft)}
+  .zl-final__grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start;margin-top:44px}
+  @media(max-width:900px){.zl-final__grid{grid-template-columns:1fr}}
+  .zl-final .zl-eyebrow{color:var(--zl-beige)}
+  .zl-contact{list-style:none;margin-top:22px}
+  .zl-contact li{display:flex;gap:12px;align-items:center;margin-bottom:14px;font-size:16px}
+  .zl-contact .dot{width:9px;height:9px;border-radius:50%;background:var(--zl-mauve);flex:none}
+  .zl-contact a{color:#fff;text-decoration:none}
+  .zl-final .zl-form-slot h3{color:#fff;margin-bottom:18px;text-align:center}
+
+  /* FOOTER */
+  .zl-footer{background:#2B1F18;color:var(--zl-beige);text-align:center;padding:42px 22px;font-size:13.5px}
+  .zl-footer-logo{width:76px;height:76px;object-fit:cover;object-position:50% 18%;border-radius:50%;margin:0 auto 18px;border:2px solid var(--zl-mauve)}
+  .zl-footer-brand{color:#fff;font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;margin-bottom:7px}
+  .zl-footer-sub{color:var(--zl-beige);font-family:'Inter',sans-serif;font-size:11px;letter-spacing:.15em;text-transform:uppercase}
+
+  /* REVEAL */
+  .zl-reveal{transition:opacity .6s ease,transform .6s ease}
+  .zl-js .zl-reveal{opacity:0;transform:translateY(18px)}
+  .zl-js .zl-reveal.in{opacity:1;transform:none}
+  .zl-page :focus-visible{outline:3px solid var(--zl-mauve);outline-offset:2px}
+  @media(prefers-reduced-motion:reduce){
+    .zl-page *{transition:none!important;animation:none!important}
+    html{scroll-behavior:auto}
+    .zl-js .zl-reveal{opacity:1;transform:none}
+  }
+
+  /* FORMULARZE: jasne tło, pola kontrastowe (ramka #806C60 na białym = ok. 5:1, WCAG 1.4.11) */
+  .zl-form-slot,.zl-form-box{background:var(--zl-beige-soft) !important;border:1px solid var(--zl-beige) !important;border-radius:22px !important;padding:34px 36px !important;box-shadow:0 12px 35px rgba(46,34,27,.16) !important;color:var(--zl-ink) !important}
+  .zl-final .zl-form-slot h3,.zl-final .zl-form-slot .zl-serif{color:var(--zl-mauve-dark) !important;text-align:center;margin-bottom:24px !important}
+  .zl-page .wpcf7,.zl-page .wpcf7 form,.zl-page .wpcf7 p,.zl-page .wpcf7 label{color:var(--zl-ink) !important;font-family:'Inter',sans-serif !important;font-size:16px;font-weight:600}
+  .zl-page .wpcf7 input:not([type="submit"]):not([type="checkbox"]):not([type="radio"]),.zl-page .wpcf7 textarea,.zl-page .wpcf7 select{display:block;width:100% !important;min-height:58px;padding:14px 18px !important;margin-top:10px;margin-bottom:18px;background:#FFFFFF !important;color:var(--zl-ink) !important;border:2px solid #806C60 !important;border-radius:14px !important;box-shadow:none !important;font-family:'Inter',sans-serif !important;font-size:17px !important;line-height:1.4;box-sizing:border-box !important;opacity:1 !important}
+  .zl-page .wpcf7 textarea{min-height:110px}
+  .zl-page .wpcf7 input::placeholder,.zl-page .wpcf7 textarea::placeholder{color:#6E6259 !important;opacity:1}
+  .zl-page .wpcf7 input:focus,.zl-page .wpcf7 textarea:focus,.zl-page .wpcf7 select:focus{outline:3px solid rgba(138,84,66,.22) !important;outline-offset:1px;border-color:var(--zl-mauve-deep) !important}
+  .zl-page .wpcf7 .wpcf7-list-item{display:block;margin:8px 0 0 !important}
+  .zl-page .wpcf7 .wpcf7-list-item-label{font-weight:500;font-size:15.5px}
+  .zl-page .wpcf7 input[type="checkbox"],.zl-page .wpcf7 input[type="radio"]{accent-color:var(--zl-mauve-deep);width:18px;height:18px;margin-right:8px;vertical-align:-3px}
+  .zl-page .wpcf7 input[type="submit"],.zl-page .wpcf7 button,.zl-page .wpcf7 .wpcf7-submit{display:block;width:100% !important;min-height:60px;padding:16px 24px !important;margin-top:10px;background:var(--zl-mauve-deep) !important;color:#FFFFFF !important;border:2px solid var(--zl-mauve-deep) !important;border-radius:14px !important;box-shadow:0 8px 22px rgba(58,42,32,.16) !important;font-family:'Inter',sans-serif !important;font-size:18px !important;font-weight:700 !important;cursor:pointer;opacity:1 !important;transition:background .2s ease,transform .2s ease}
+  .zl-page .wpcf7 input[type="submit"]:hover,.zl-page .wpcf7 .wpcf7-submit:hover{background:var(--zl-mauve-dark) !important;border-color:var(--zl-mauve-dark) !important;transform:translateY(-2px)}
+  .zl-page .wpcf7 .wpcf7-acceptance .wpcf7-list-item-label{color:var(--zl-ink-soft) !important;font-size:13px !important;font-weight:400 !important}
+  .zl-page .wpcf7-response-output{color:var(--zl-ink) !important;border-radius:10px;font-size:14px}
+  .zl-page .wpcf7-not-valid-tip{color:#B42318 !important;font-size:13px}
+  @media(max-width:560px){
+    .zl-form-slot,.zl-form-box{padding:24px 18px !important;border-radius:18px !important}
+    .zl-page .wpcf7 input:not([type="submit"]):not([type="checkbox"]):not([type="radio"]),.zl-page .wpcf7 textarea,.zl-page .wpcf7 select{min-height:54px;font-size:16px !important}
+  }
+  /* przyciski kroków formularza (snippet [ALL] Formularz krok po kroku) w jednym rzędzie */
+  .zl-page .wpcf7 form .cf7mls-btns{display:flex !important;flex-flow:row nowrap !important;align-items:stretch !important;justify-content:space-between !important;gap:12px !important;width:100% !important}
+  .zl-page .wpcf7 form .cf7mls-btns > *,.zl-page .wpcf7 form .cf7mls-btns input,.zl-page .wpcf7 form .cf7mls-btns button,.zl-page .wpcf7 form .cf7mls_back,.zl-page .wpcf7 form .cf7mls_next,.zl-page .wpcf7 form input[type="button"]{box-sizing:border-box !important;width:auto !important;min-width:0 !important;max-width:100% !important;flex:1 1 0 !important;white-space:nowrap !important;text-align:center !important;padding:16px 12px !important;line-height:1.3 !important}
+  @media(max-width:560px){
+    .zl-page .wpcf7 form .cf7mls-btns{gap:8px !important}
+    .zl-page .wpcf7 form .cf7mls-btns > *,.zl-page .wpcf7 form .cf7mls-btns input,.zl-page .wpcf7 form .cf7mls-btns button{font-size:15px !important;padding:14px 8px !important}
+  }
+</style>
+
+<script>
+document.documentElement.classList.add('zl-js');
+</script>
+
+<div class="zl-page">
+
+  <!-- NAV -->
+  <nav class="zl-nav">
+    <div class="zl-nav__in">
+      <a href="#top" class="zl-brand">
+        <img class="zl-brand-logo" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-kasia.jpg" alt="Katarzyna Brudniak, KATE My Beauty Space">
+        <span class="zl-brand-text">
+          <span>KATE</span>
+          <span class="zl-brand-dot">•</span>
+          <span>My Beauty Space</span>
+          <span class="zl-brand-dot">•</span>
+          <span class="zl-brand-city">WROCŁAW</span>
+        </span>
+      </a>
+      <ul class="zl-nav__links">
+        <li><a href="#efekty">Efekty</a></li>
+        <li><a href="#o-mnie">O mnie</a></li>
+        <li><a href="#opinie">Opinie</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li class="zl-nav__cta"><a href="#rezerwacja-1" class="zl-btn">Umów konsultację</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header class="zl-hero" id="top">
+    <div class="zl-wrap zl-hero__grid">
+      <div>
+        <span class="zl-hero__badge"><b>✦</b> Wrocław · Autorska terapia twarzy</span>
+        <h1>Wyjdź z domu bez makijażu i <em>poczuj się pewnie we własnej skórze</em></h1>
+        <p class="lead">
+          Autorska terapia twarzy na trądzik, przebarwienia i blizny potrądzikowe.
+          Jestem Kasia, kosmetolog z ponad 10-letnim doświadczeniem. Każdy plan dobieram
+          do skóry i trybu życia, bez obietnic cudów, za to z efektami, które widać.
+        </p>
+        <div class="zl-rating"><span class="stars">★★★★★</span><span><b>5.0</b> · 97 opinii na Facebooku</span></div>
+
+        <div class="zl-hero__offer">
+          <span class="zl-hero__offer-title">✦ Oferta tego miesiąca</span>
+          <span class="zl-hero__offer-price">Zabieg niespodzianka GRATIS</span>
+          <span class="zl-hero__offer-text">Dla pierwszych 20 osób w tym miesiącu. Kosmetyki do regeneracji po zabiegu w prezencie.</span>
+        </div>
+
+        <a href="#rezerwacja-1" class="zl-btn">Zapisz się na konsultację →</a>
+      </div>
+
+      <div class="zl-hero__media">
+        <video class="zl-video" autoplay muted loop playsinline controls preload="metadata" poster="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-kasia.jpg">
+          <source src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-hero.mp4" type="video/mp4">
+          Twoja przeglądarka nie obsługuje odtwarzania filmu.
+        </video>
+      </div>
+    </div>
+  </header>
+
+  <!-- EFEKTY -->
+  <section id="efekty" style="background:var(--zl-cream-2)">
+    <div class="zl-wrap zl-center">
+      <div class="zl-divider"></div>
+      <h2>Realne efekty autorskiej terapii</h2>
+      <p class="zl-sub">Trądzik, przebarwienia, blizny. Zobacz, jak zmieniała się skóra moich klientek i klientów.</p>
+
+      <div class="zl-carousel" id="efekty-carousel-1">
+        <button class="zl-arrow zl-arrow--prev" type="button" aria-label="Poprzednie zdjęcie">‹</button>
+        <div class="zl-track">
+          <div class="zl-slide"><img src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-pp-1.jpg" alt="Trądzik przed i po autorskiej terapii twarzy" loading="lazy"><b>PRZED → PO</b></div>
+          <div class="zl-slide"><img src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-pp-2.jpg" alt="Trądzik przed i po autorskiej terapii twarzy" loading="lazy"><b>PRZED → PO</b></div>
+          <div class="zl-slide"><img src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-pp-3.jpg" alt="Trądzik i blizny przed i po terapii" loading="lazy"><b>PRZED → PO</b></div>
+          <div class="zl-slide"><img src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-pp-5.jpg" alt="Trądzik przed i po autorskiej terapii twarzy" loading="lazy"><b>PRZED → PO</b></div>
+        </div>
+        <button class="zl-arrow zl-arrow--next" type="button" aria-label="Następne zdjęcie">›</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- REZERWACJA -->
+  <section id="rezerwacja-1">
+    <div class="zl-wrap zl-center">
+      <div class="zl-divider"></div>
+      <h2>Umów konsultację i odbierz prezent</h2>
+      <p class="zl-sub">Zostaw kontakt. Oddzwonię, odpowiem na pytania i razem ustalimy, od czego zacząć terapię Twojej skóry.</p>
+
+      <div class="zl-count-mini">
+        <span class="lbl">⏰ Oferta miesiąca kończy się za:</span>
+        <span class="time" id="zl-time">--</span>
+      </div>
+
+      <div class="zl-two">
+        <div class="zl-card zl-reveal">
+          <span class="zl-eyebrow">Oferta specjalna</span>
+          <h3 class="zl-serif">Autorska terapia twarzy</h3>
+          <ul class="zl-offer-checks">
+            <li>Trądzik i niedoskonałości</li>
+            <li>Przebarwienia i nierówny koloryt</li>
+            <li>Blizny potrądzikowe</li>
+            <li>Plan dobrany do skóry i trybu życia</li>
+            <li>Efekty widoczne już po pierwszym zabiegu</li>
+            <li>Powrót do obowiązków następnego dnia</li>
+          </ul>
+          <div class="zl-bonus">
+            ✦ <b>DLACZEGO KASIA?</b><br>
+            Ponad 10 lat praktyki i ponad 100 tys. zł zainwestowanych we własną edukację.
+            Certyfikowana kosmetolog ZENA, od 5 lat szkoli innych kosmetologów z zabiegów na blizny i trądzik.
+          </div>
+          <div class="zl-price">
+            <span class="old">Cena zabiegu: ok. 400 zł</span>
+            <span class="new">+ zabieg niespodzianka GRATIS</span>
+            <span class="promo">Dla pierwszych 20 osób w tym miesiącu, do tego kosmetyki do regeneracji w prezencie.</span>
+          </div>
+        </div>
+
+        <div class="zl-form-box zl-reveal">
+          <h3 class="zl-serif zl-center" style="margin-bottom:16px">Zostaw kontakt, oddzwonię</h3>
+          [contact-form-7 id="XXXXXXX" title="KB Autorska terapia"]
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INTRO -->
+  <section id="intro" style="background:var(--zl-cream-2)">
+    <div class="zl-wrap zl-center">
+      <div class="zl-divider"></div>
+      <h2>Kompleksy to nie jest coś, o czym po prostu zapominasz</h2>
+      <p class="zl-sub">
+        Trądzik, przebarwienia, ślady po niedoskonałościach. Z czasem uczysz się z nimi żyć,
+        retuszujesz zdjęcia i sięgasz po korektor przed każdym wyjściem. Właściwie dobrana pielęgnacja
+        i zabiegi potrafią to zmienić, o ile pasują do Twojej skóry i trybu życia.
+        Właśnie tak pracuję: najpierw poznaję skórę, potem układam plan.
+      </p>
+      <p style="margin-top:26px"><a href="#rezerwacja-1" class="zl-btn">Umów konsultację →</a></p>
+    </div>
+  </section>
+
+  <!-- DLACZEGO -->
+  <section id="dlaczego">
+    <div class="zl-wrap zl-center">
+      <div class="zl-divider"></div>
+      <h2>Dlaczego autorska terapia?</h2>
+      <p class="zl-sub">Nie gotowy pakiet z katalogu, tylko plan ułożony pod konkretną skórę i konkretną osobę.</p>
+      <div class="zl-why__grid zl-why">
+        <div class="zl-card zl-reveal"><div class="ico">✦</div><h3>Indywidualny plan</h3><p>Dobieram metodę i preparaty do skóry, jej historii i Twojego dnia. Jeśli coś nie jest dla Ciebie, mówię o tym wprost.</p></div>
+        <div class="zl-card zl-reveal"><div class="ico">✨</div><h3>Efekt od pierwszej wizyty</h3><p>Pierwsze zmiany widać zwykle już po pierwszym zabiegu, a kolejne wizyty je pogłębiają.</p></div>
+        <div class="zl-card zl-reveal"><div class="ico">🌿</div><h3>Szybki powrót do życia</h3><p>Następnego dnia wracasz do swoich obowiązków. Na regenerację dostajesz ode mnie kosmetyki w prezencie.</p></div>
+        <div class="zl-card zl-reveal"><div class="ico">🤍</div><h3>Opieka na każdym etapie</h3><p>Tłumaczę, co robimy i dlaczego, a po zabiegu wiesz dokładnie, jak dbać o skórę w domu.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- O MNIE -->
+  <section id="o-mnie" style="background:var(--zl-cream-2)">
+    <div class="zl-wrap zl-center">
+      <div class="zl-divider"></div>
+      <h2>Kim jestem?</h2>
+      <div class="zl-about">
+        <img src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-kasia.jpg" alt="Katarzyna Brudniak, kosmetolog" loading="lazy">
+        <div>
+          <h3 class="zl-serif">Katarzyna Brudniak, KATE My Beauty Space</h3>
+          <p style="margin-top:10px;color:var(--zl-ink-soft)">
+            Specjalizuję się w redukcji blizn i niedoskonałości skóry. Doskonale znam uczucie,
+            z którym przychodzą do mnie klientki, bo sama byłam w ich miejscu. Po latach praktyki
+            opracowałam własne metody zabiegowe, którymi dziś pracuję w gabinecie przy ul. Długiej we Wrocławiu.
+          </p>
+          <ul>
+            <li>Ponad 10 lat doświadczenia</li>
+            <li>Ponad 100 tys. zł zainwestowanych we własną edukację</li>
+            <li>Certyfikowana kosmetolog ZENA</li>
+            <li>Od 5 lat szkoli kosmetologów z zabiegów na blizny i trądzik</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- OPINIE -->
+  <section id="opinie">
+    <div class="zl-wrap zl-center">
+      <div class="zl-divider"></div>
+      <h2>Co mówią moje klientki?</h2>
+      <p class="zl-sub">★★★★★ 5.0 · 97 opinii na Facebooku. Kilka z nich poniżej.</p>
+      <div class="zl-reviews__grid">
+        <img class="zl-review-shot zl-reveal" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-opinia-1.jpg" alt="Opinia klientki o autorskiej terapii twarzy" loading="lazy">
+        <img class="zl-review-shot zl-reveal" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-opinia-2.jpg" alt="Opinia klientki o zabiegach u Kasi" loading="lazy">
+        <img class="zl-review-shot zl-reveal" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-opinia-3.jpg" alt="Opinia klientki o zabiegach u Kasi" loading="lazy">
+        <img class="zl-review-shot zl-reveal" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-opinia-4.jpg" alt="Opinia klientki o zabiegach u Kasi" loading="lazy">
+        <img class="zl-review-shot zl-reveal" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-opinia-5.jpg" alt="Opinia klientki o zabiegach u Kasi" loading="lazy">
+        <img class="zl-review-shot zl-reveal" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-opinia-6.jpg" alt="Opinia klienta o zabiegach u Kasi" loading="lazy">
+      </div>
+    </div>
+  </section>
+
+  <!-- DRUGA SEKCJA EFEKTÓW -->
+  <section id="efekty-2" style="background:var(--zl-cream-2)">
+    <div class="zl-wrap zl-center">
+      <div class="zl-divider"></div>
+      <h2>Zobacz kolejne metamorfozy</h2>
+      <p class="zl-sub">Przesuń, aby zobaczyć więcej efektów.</p>
+      <div class="zl-carousel" id="efekty-carousel-2">
+        <button class="zl-arrow zl-arrow--prev" type="button" aria-label="Poprzednie zdjęcie">‹</button>
+        <div class="zl-track">
+          <div class="zl-slide"><img src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-pp-6.jpg" alt="Niedoskonałości przed i po terapii" loading="lazy"><b>PRZED → PO</b></div>
+          <div class="zl-slide"><img src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-pp-4.jpg" alt="Blizna przed i po terapii" loading="lazy"><b>PRZED → PO</b></div>
+          <div class="zl-slide"><img src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-pp-7.jpg" alt="Usta przed i po zabiegu" loading="lazy"><b>PRZED → PO</b></div>
+          <div class="zl-slide"><img src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-pp-1.jpg" alt="Trądzik przed i po autorskiej terapii twarzy" loading="lazy"><b>PRZED → PO</b></div>
+          <div class="zl-slide"><img src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-pp-3.jpg" alt="Trądzik i blizny przed i po terapii" loading="lazy"><b>PRZED → PO</b></div>
+        </div>
+        <button class="zl-arrow zl-arrow--next" type="button" aria-label="Następne zdjęcie">›</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section id="rezerwacja" class="zl-final">
+    <div class="zl-wrap">
+      <div class="zl-center">
+        <h2 class="zl-serif">Gotowa na skórę bez korektora?</h2>
+        <p class="zl-sub">Zostaw kontakt, a oddzwonię i umówimy konsultację w gabinecie.<br>Pierwsze 20 osób w tym miesiącu dostaje zabieg niespodziankę gratis.</p>
+      </div>
+      <div class="zl-final__grid">
+        <div>
+          <span class="zl-eyebrow">Zrób coś dobrego dla swojej skóry</span>
+          <h3 class="zl-serif" style="font-size:32px">Autorska terapia twarzy we Wrocławiu</h3>
+          <ul class="zl-contact">
+            <li><span class="dot"></span>KATE My Beauty Space · Katarzyna Brudniak</li>
+            <li><span class="dot"></span><a href="tel:+48530824384">530 824 384</a></li>
+            <li><span class="dot"></span>ul. Długa, Wrocław</li>
+            <li><span class="dot"></span>Pon. do sob. 9:00 do 20:00, niedz. 9:00 do 17:00</li>
+          </ul>
+          <p style="margin-top:14px;color:var(--zl-beige-soft);font-size:15px">
+            Zabieg niespodzianka <strong style="color:#fff">GRATIS</strong> dla pierwszych 20 osób w tym miesiącu.<br>
+            Kosmetyki do regeneracji po zabiegu w prezencie.
+          </p>
+        </div>
+        <div class="zl-form-slot">
+          <h3 class="zl-serif">Zostaw kontakt, oddzwonię</h3>
+          [contact-form-7 id="XXXXXXX" title="KB Autorska terapia"]
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq" style="background:var(--zl-cream-2)">
+    <div class="zl-wrap zl-center">
+      <div class="zl-divider"></div>
+      <h2>Pytania i odpowiedzi</h2>
+      <div class="zl-faq-list" style="text-align:left">
+        <details class="zl-faq"><summary>Na czym polega autorska terapia twarzy?</summary><div class="answer"><p>To plan zabiegów i pielęgnacji ułożony indywidualnie pod Twoją skórę. W zależności od potrzeb łączę m.in. mezoterapię z peelingiem chemicznym, peeling algowy i unikatowe preparaty. Na konsultacji oceniam skórę i dobieram metodę, a jeśli coś nie jest dla Ciebie, mówię o tym wprost.</p></div></details>
+        <details class="zl-faq"><summary>Z jakimi problemami mogę przyjść?</summary><div class="answer"><p>Najczęściej pracuję z trądzikiem, przebarwieniami, bliznami potrądzikowymi i niedoskonałościami, które utrudniają wyjście z domu bez makijażu.</p></div></details>
+        <details class="zl-faq"><summary>Kiedy zobaczę efekty?</summary><div class="answer"><p>Pierwsze zmiany są zwykle widoczne już po pierwszym zabiegu. Pełny efekt buduje seria, najczęściej 4 do 5 zabiegów, a dokładny plan ustalamy na konsultacji.</p></div></details>
+        <details class="zl-faq"><summary>Czy po zabiegu mogę normalnie funkcjonować?</summary><div class="answer"><p>Tak. Do codziennych obowiązków wracasz następnego dnia, a na szybszą regenerację dostajesz ode mnie kosmetyki w prezencie.</p></div></details>
+        <details class="zl-faq"><summary>Jak przygotować się do zabiegu?</summary><div class="answer"><p>Na 24 do 48 godzin przed zabiegiem nie pij alkoholu, w dniu zabiegu przyjdź bez makijażu, kilka dni wcześniej unikaj mocnego słońca i solarium, a przez minimum 7 dni nie wykonuj innych zabiegów w tym obszarze. Powiedz mi też o chorobach, alergiach i lekach, które przyjmujesz.</p></div></details>
+        <details class="zl-faq"><summary>Czy są przeciwwskazania?</summary><div class="answer"><p>Tak, m.in. ciąża i karmienie piersią (zależnie od zabiegu), aktywne infekcje lub stany zapalne w miejscu zabiegu, choroby autoimmunologiczne i nowotworowe (bez zgody lekarza), skłonność do bliznowców, alergia na składniki preparatów oraz leki światłouczulające lub przeciwzakrzepowe. Wszystko omówimy na konsultacji.</p></div></details>
+        <details class="zl-faq"><summary>Jak dbać o skórę po zabiegu?</summary><div class="answer"><p>Przez 24 godziny nie nakładaj makijażu w miejscu zabiegu, przez kilka dni unikaj sauny, basenu i intensywnego wysiłku, przez minimum 7 dni chroń skórę przed słońcem i stosuj krem z filtrem SPF. Nie dotykaj i nie drap skóry, a wszystkie zalecenia dostaniesz ode mnie na piśmie.</p></div></details>
+        <details class="zl-faq"><summary>Czym jest zabieg niespodzianka?</summary><div class="answer"><p>To dodatkowy zabieg, który dobieram do Twojej skóry, w prezencie dla pierwszych 20 osób, które zgłoszą się w tym miesiącu.</p></div></details>
+        <details class="zl-faq"><summary>Gdzie przyjmujesz?</summary><div class="answer"><p>W gabinecie KATE My Beauty Space przy ul. Długiej we Wrocławiu. Przyjeżdżają do mnie również osoby z okolic Wrocławia.</p></div></details>
+        <details class="zl-faq"><summary>Jak się zapisać?</summary><div class="answer"><p>Wypełnij krótki formularz na tej stronie albo zadzwoń pod 530 824 384. Oddzwonię, odpowiem na pytania i ustalimy termin konsultacji.</p></div></details>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="zl-footer">
+    <img class="zl-footer-logo" src="https://zapisy-beauty.pl/wp-content/uploads/2026/10/kb-autorska-terapia-kasia.jpg" alt="KATE My Beauty Space" loading="lazy">
+    <div class="zl-footer-brand">KATE My Beauty Space</div>
+    <div class="zl-footer-sub">Autorska terapia twarzy · Wrocław</div>
+    <div style="margin-top:14px;">Katarzyna Brudniak · 530 824 384</div>
+    <p style="margin-top:12px">© 2026 KATE My Beauty Space. Wszelkie prawa zastrzeżone.</p>
+  </footer>
+
+</div>
+
+<!-- REVEAL -->
+<script>
+(function(){
+  function all(){
+    var n=document.querySelectorAll('.zl-reveal');
+    for(var i=0;i<n.length;i++){ n[i].classList.add('in'); }
+  }
+  try{
+    if('IntersectionObserver' in window){
+      var o=new IntersectionObserver(function(en){
+        en.forEach(function(e){
+          if(e.isIntersecting){ e.target.classList.add('in'); o.unobserve(e.target); }
+        });
+      },{threshold:.08});
+      var els=document.querySelectorAll('.zl-reveal');
+      for(var i=0;i<els.length;i++){ o.observe(els[i]); }
+      setTimeout(all,1800);
+    }else{ all(); }
+  }catch(e){ all(); }
+})();
+</script>
+
+<!-- COUNTDOWN do końca bieżącego miesiąca (realny termin oferty "w tym miesiącu") -->
+<script>
+(function(){
+  var el=document.getElementById('zl-time');
+  if(!el) return;
+  var now=new Date();
+  var end=new Date(now.getFullYear(), now.getMonth()+1, 1, 0, 0, 0).getTime();
+  function pad(x){ return String(x).padStart(2,'0'); }
+  function t(){
+    var d=Math.max(0,end-Date.now());
+    var days=Math.floor(d/86400000);
+    var h=Math.floor(d/3600000)%24;
+    var m=Math.floor(d/60000)%60;
+    var s=Math.floor(d/1000)%60;
+    var txt=pad(h)+':'+pad(m)+':'+pad(s);
+    if(days>0){ txt=days+' d '+txt; }
+    el.textContent=txt;
+    if(d<=0){ clearInterval(iv); }
+  }
+  var iv=setInterval(t,1000);
+  t();
+})();
+</script>
+
+<!-- CAROUSELE (bez znaku ampersand: WordPress psuje && w treści strony) -->
+<script>
+document.querySelectorAll('.zl-carousel').forEach(function(root){
+  var track=root.querySelector('.zl-track'); if(!track) return;
+  var prev=root.querySelector('.zl-arrow--prev');
+  var next=root.querySelector('.zl-arrow--next');
+  function snapOn(){track.classList.add('zl-snap');}
+  ['touchstart','pointerdown','wheel'].forEach(function(ev){root.addEventListener(ev,snapOn,{passive:true,once:true});});
+  var reduce=false; if(window.matchMedia){reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;}
+  function step(){var s=track.querySelector('.zl-slide'); if(!s) return track.clientWidth;
+    var cs=getComputedStyle(track); var gap=parseFloat(cs.columnGap||cs.gap)||22;
+    return s.getBoundingClientRect().width+gap;}
+  function atEnd(){return track.scrollLeft+track.clientWidth>=track.scrollWidth-4;}
+  function atStart(){return track.scrollLeft<=4;}
+  function goNext(){if(atEnd()){track.scrollTo({left:0,behavior:'smooth'});}else{track.scrollBy({left:step(),behavior:'smooth'});}}
+  function goPrev(){if(atStart()){track.scrollTo({left:track.scrollWidth,behavior:'smooth'});}else{track.scrollBy({left:-step(),behavior:'smooth'});}}
+  var timer=null;
+  function stopA(){if(timer){clearInterval(timer);timer=null;}}
+  function startA(){if(reduce){return;} stopA(); timer=setInterval(goNext,5000);}
+  if(next){next.addEventListener('click',function(){goNext();startA();});}
+  if(prev){prev.addEventListener('click',function(){goPrev();startA();});}
+  root.addEventListener('mouseenter',stopA);
+  root.addEventListener('mouseleave',startA);
+  var st; track.addEventListener('scroll',function(){clearTimeout(st);st=setTimeout(startA,700);},{passive:true});
+  startA();
+});
+</script>
+<!-- /wp:html -->
