@@ -566,6 +566,44 @@ document.documentElement.classList.add('zl-js');
 })();
 </script>
 
+<!-- FORMULARZ: pytanie + odpowiedzi w jednym .zl-cf7-field, zeby snippet "krok po kroku" (WPCode 2009) chowal je razem.
+     Dziala tez przy starym zapisie <p>Pytanie<br>[radio]</p>, ktory CF7 rozbija na dwa akapity. Bez znaku ampersand. -->
+<script>
+(function(){
+  function wrapForm(f){
+    var wraps=f.querySelectorAll('.wpcf7-form-control-wrap');
+    for(var i=0;i<wraps.length;i++){
+      var w=wraps[i];
+      if(w.closest('.zl-cf7-field')) continue;
+      var box=w.closest('p');
+      if(!box) continue;
+      if(!f.contains(box)) continue;
+      var d=document.createElement('div');
+      d.className='zl-cf7-field';
+      box.parentNode.insertBefore(d,box);
+      var prev=d.previousElementSibling;
+      if(prev){
+        if(prev.tagName==='P'){
+          if(!prev.querySelector('input,select,textarea,.wpcf7-form-control-wrap')){
+            var t=(prev.textContent||'').trim();
+            if(t){
+              var lbl=document.createElement('span');
+              lbl.className='zl-lbl';
+              lbl.textContent=t;
+              d.appendChild(lbl);
+              prev.parentNode.removeChild(prev);
+            }
+          }
+        }
+      }
+      d.appendChild(box);
+    }
+  }
+  var forms=document.querySelectorAll('.zl-page .wpcf7-form');
+  for(var k=0;k<forms.length;k++){ try{ wrapForm(forms[k]); }catch(e){} }
+})();
+</script>
+
 <!-- COUNTDOWN 15 minut (standard LP ITM) -->
 <script>
 (function(){
