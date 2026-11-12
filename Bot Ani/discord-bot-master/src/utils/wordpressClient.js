@@ -150,15 +150,39 @@ add_action('wp_head', function () {
   if ($d) echo '<meta name="description" content="' . esc_attr($d) . '">' . "\\n";
 }, 1);`;
 
+// Ten sam kod do recznego wklejenia (np. WPCode -> PHP Snippet, Run Everywhere),
+// gdy na stronie nie ma wtyczki Code Snippets z REST API.
+export const META_DESCRIPTION_SNIPPET_PHP = META_SNIPPET_CODE;
+
 let metaSnippetEnsured = false;
 
+/** Czy klucz META_DESCRIPTION_KEY jest juz zarejestrowany w REST stron (schemat OPTIONS /wp/v2/pages). */
+export async function isMetaDescriptionRegistered() {
+  const schema = await wpFetch("/wp/v2/pages", { method: "OPTIONS" });
+  return Boolean(schema?.schema?.properties?.meta?.properties?.[META_DESCRIPTION_KEY]);
+}
+
 /**
- * Upewnia sie (raz na proces), ze fragment od meta description istnieje i jest
- * aktywny. Musi pojsc PRZED wpCreatePage - inaczej REST odrzuci meta.
+ * Upewnia sie (raz na proces), ze klucz meta description jest zarejestrowany.
+ * Jesli rejestruje go juz jakis fragment (Code Snippets albo wklejony recznie
+ * w WPCode), nic nie robi - drugi fragment dublowalby <meta> w <head>.
+ * Inaczej zaklada fragment przez REST Code Snippets. Musi pojsc PRZED
+ * wpCreatePage - inaczej REST odrzuci meta.
  * Blad nie jest krytyczny: strona powstaje, tylko bez opisu.
  */
 export async function ensureMetaDescriptionSnippet() {
   if (metaSnippetEnsured) return;
+  if (await isMetaDescriptionRegistered()) {
+    metaSnippetEnsured = true;
+    return;
+  }
+  const routes = (await wpFetch("/").catch(() => null))?.namespaces || [];
+  if (!routes.includes("code-snippets/v1")) {
+    throw new Error(
+      `klucz ${META_DESCRIPTION_KEY} nie jest zarejestrowany, a na stronie nie ma wtyczki Code Snippets (REST code-snippets/v1). ` +
+        "Fragment PHP trzeba raz wkleić ręcznie w WPCode (kod: lp.sh fragment-seo --php)."
+    );
+  }
   await wpUpsertSnippet({
     name: META_SNIPPET_NAME,
     code: META_SNIPPET_CODE,

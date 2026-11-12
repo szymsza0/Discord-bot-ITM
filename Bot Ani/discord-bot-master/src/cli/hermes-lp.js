@@ -12,12 +12,13 @@
 //            [--slug ...] [--strona <id szkicu do nadpisania>] [--czyj "Hermes (Imię)"] [--bez-arkusza]
 //   formularze [--szukaj ...]
 //   sprawdz <id>
+//   fragment-seo [--php]
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { GOOGLE_LP_SHEET_ID, WP_BASE_URL } from "../config.js";
 import { upsertLPRow } from "../utils/lpSheet.js";
-import { wpFetch, wpCreatePage } from "../utils/wordpressClient.js";
+import { wpFetch, wpCreatePage, isMetaDescriptionRegistered, META_DESCRIPTION_SNIPPET_PHP } from "../utils/wordpressClient.js";
 import { fetchDocPlainText } from "../utils/googleDocs.js";
 import { getLPTemplate } from "../utils/lpTemplate.js";
 import { wrapWpHtmlBlock } from "../utils/lpNewTemplate.js";
@@ -38,7 +39,9 @@ const POMOC = `Landing page na zapisy-beauty.pl, wzorowany na żywych LP (szkic,
         [--brief <link>] [--slug ...] [--strona <id szkicu: poprawka zamiast nowej strony>] [--czyj "Hermes (Imię)"]
         [--bez-arkusza]
   lp.sh formularze [--szukaj "<fragment tytułu>"]      formularze Contact Form 7 (shortcode)
-  lp.sh sprawdz <id>                                   status, tytuł, tokeny, formularze, zdjęcia`;
+  lp.sh sprawdz <id>                                   status, tytuł, tokeny, formularze, zdjęcia
+  lp.sh fragment-seo [--php]                           czy WP przyjmuje meta description (--opis); --php = kod
+      fragmentu do jednorazowego wklejenia w WPCode (PHP Snippet, Run Everywhere), gdy nie przyjmuje`;
 
 const KATEGORIE = ["szkolenia", "depilacja", "wlosy", "cialo", "twarz"];
 // Kolejność = pierwszeństwo przy remisie (np. „usuwanie owłosienia” to depilacja, nie włosy).
@@ -425,10 +428,10 @@ async function utworz(args) {
   }
 
   if (opis) {
-    // Klucz meta rejestruje fragment w wtyczce Code Snippets; bez niej WP po cichu gubi opis.
+    // Klucz meta rejestruje fragment PHP ITM (Code Snippets albo WPCode); bez niego WP po cichu gubi opis.
     const zapisana = await wpFetch(`/wp/v2/pages/${page.id}?context=edit&_fields=meta`).catch(() => null);
     if (!zapisana?.meta?.itm_meta_description) {
-      uwagi.push("Meta description się nie zapisał (na stronie nie działa wtyczka Code Snippets z fragmentem ITM): wpisz go ręcznie albo pomiń.");
+      uwagi.push("Meta description się nie zapisał: na WP brak fragmentu PHP ITM rejestrującego opis (lp.sh fragment-seo). Po jego dodaniu ponów utworz --strona <id>.");
     }
   }
 
@@ -490,6 +493,21 @@ async function sprawdz(args) {
   });
 }
 
+async function fragmentSeo(args) {
+  const zarejestrowany = await isMetaDescriptionRegistered();
+  if (args.php) {
+    process.stdout.write(META_DESCRIPTION_SNIPPET_PHP + "\n");
+    return;
+  }
+  wynik({
+    ok: true,
+    zarejestrowany,
+    uwaga: zarejestrowany
+      ? "WP przyjmuje meta description: --opis zapisze się w szkicu."
+      : "WP nie przyjmuje meta description. Człowiek z dostępem admina wkleja raz kod z `lp.sh fragment-seo --php` w WPCode (Add Snippet -> PHP Snippet, Auto Insert: Run Everywhere, Active).",
+  });
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const cmd = args._[0];
@@ -497,7 +515,7 @@ async function main() {
     process.stdout.write(POMOC + "\n");
     return;
   }
-  const polecenia = { kontekst, media, utworz, formularze, sprawdz };
+  const polecenia = { kontekst, media, utworz, formularze, sprawdz, "fragment-seo": fragmentSeo };
   if (!polecenia[cmd]) blad(`Nieznane polecenie: ${cmd}. Dostępne: ${Object.keys(polecenia).join(", ")} (lp.sh --help).`);
   return polecenia[cmd](args);
 }
