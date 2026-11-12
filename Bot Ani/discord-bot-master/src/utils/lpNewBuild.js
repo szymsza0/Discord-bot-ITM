@@ -109,12 +109,27 @@ const POPRAWKI_BLOCK =
   ".zl-page section h2,.zl-page section .zl-h2{margin:0 0 clamp(20px,2.6vw,36px) !important}" +
   ".zl-page section h3{margin:0 0 clamp(10px,1.4vw,16px) !important}" +
   ".zl-page section .zl-divider + h2{margin-top:8px !important}" +
+  // Telefon (Szymon 12.11.2026, SFLJ): „5,0” i gwiazdki łamały się w podsumowaniu opinii, przycisk w menu
+  // zajmował dwie linie, a strzałka w przycisku spadała do nowej linii.
+  ".zl-reviews__sum .big,.zl-reviews__sum .stars,.zl-rating .stars,.zl-review__stars{white-space:nowrap}" +
+  ".zl-page .zl-btn{text-wrap:balance}" +
+  "@media(max-width:560px){" +
+  ".zl-reviews__sum{flex-wrap:wrap;justify-content:center;row-gap:4px;border-radius:22px !important;padding:12px 20px !important;text-align:center}" +
+  ".zl-reviews__sum .cap{flex-basis:100%}" +
+  ".zl-nav__in{gap:10px}" +
+  ".zl-nav .zl-btn{white-space:nowrap;padding:9px 12px !important;font-size:12.5px !important;line-height:1.2 !important}" +
+  "}" +
   "</style>\n" +
   "<!-- /wp:html -->\n\n";
 
 /** Treść z poprawkami CSS (bez dubla). */
-export const withPoprawki = (content) =>
-  (content || "").includes(`id="${POPRAWKI_ID}"`) ? content : POPRAWKI_BLOCK + content;
+const POPRAWKI_RE = new RegExp(`<style id="${POPRAWKI_ID}">[\\s\\S]*?</style>`);
+/** Treść z aktualnymi poprawkami CSS: dokłada blok albo podmienia starszą wersję (bez dubla). */
+export const withPoprawki = (content) => {
+  const c = content || "";
+  const styl = POPRAWKI_BLOCK.match(POPRAWKI_RE)[0];
+  return POPRAWKI_RE.test(c) ? c.replace(POPRAWKI_RE, styl) : POPRAWKI_BLOCK + c;
+};
 
 /* Blok webhooka leadów (make.sh przeplyw --typ lp, ~/itm-os/agent/make/wp.py): skrypt w treści LP, który po wysłaniu
  * formularza CF7 przekazuje lead do Make. Poprawka strony nie może go zgubić, więc zapis treści bez niego dokleja go z
