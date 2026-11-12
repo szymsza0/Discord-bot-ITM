@@ -54,6 +54,7 @@ import {
   createLpPage,
   withNoindex,
   hasNoindex,
+  zachowajWebhookLeadow,
   isLpToolPage,
   formPlaceholders,
   LP_MARKER,
@@ -544,6 +545,7 @@ async function formularzWHtml(html, args) {
  */
 async function zapiszStrone(obecna, body) {
   const kopia = kopiaLokalna(obecna.id, obecna.content?.raw);
+  if (typeof body.content === "string") body = { ...body, content: zachowajWebhookLeadow(obecna.content?.raw, body.content).content };
   const zap = await wpFetch(`/wp/v2/pages/${obecna.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const rew = await rewizje(obecna.id, obecna.content?.raw);
   return {
@@ -1139,6 +1141,10 @@ async function wp(args) {
     const obecna = await wpFetch(`/wp/v2/${typ}/${id}?context=edit&_fields=id,slug,status,content`).catch(() => null);
     if (obecna) {
       kopia = kopiaLokalna(`${typ === "posts" ? "wpis-" : ""}${id}`, obecna.content?.raw);
+      if (typ === "pages" && typeof dane?.content === "string") {
+        const zw = zachowajWebhookLeadow(obecna.content?.raw, dane.content);
+        if (zw.doklejony) (dane.content = zw.content), uwagi.push("Doklejony blok webhooka leadów (itm-webhook-cf7) z poprzedniej treści.");
+      }
       if (typ === "pages" && typeof dane?.content === "string" && !(await nieLp(obecna)) && !hasNoindex(dane.content)) {
         dane.content = withNoindex(dane.content);
         uwagi.push("Dopisany blok noindex (LP zawsze z noindex).");

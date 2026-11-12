@@ -116,6 +116,18 @@ const POPRAWKI_BLOCK =
 export const withPoprawki = (content) =>
   (content || "").includes(`id="${POPRAWKI_ID}"`) ? content : POPRAWKI_BLOCK + content;
 
+/* Blok webhooka leadów (make.sh przeplyw --typ lp, ~/itm-os/agent/make/wp.py): skrypt w treści LP, który po wysłaniu
+ * formularza CF7 przekazuje lead do Make. Poprawka strony nie może go zgubić, więc zapis treści bez niego dokleja go z
+ * poprzedniej wersji (usunąć go można tylko świadomie, w wp-admin). */
+const WEBHOOK_LEADOW_RE = /(?:<!-- wp:html -->\s*)?<!-- itm-webhook-cf7 [\s\S]*?<!-- \/itm-webhook-cf7 -->(?:\s*<!-- \/wp:html -->)?/;
+
+/** Nowa treść z blokiem webhooka leadów ze starej, gdy nowa go nie ma. Zwraca { content, doklejony }. */
+export function zachowajWebhookLeadow(stara, nowa) {
+  const m = (stara || "").match(WEBHOOK_LEADOW_RE);
+  if (!m || typeof nowa !== "string" || WEBHOOK_LEADOW_RE.test(nowa)) return { content: nowa, doklejony: false };
+  return { content: `${nowa.replace(/\s+$/, "")}\n\n${m[0]}\n`, doklejony: true };
+}
+
 /** Czy treść strony ma meta robots z noindex. */
 export const hasNoindex = (raw) => NOINDEX_RE.test(raw || "");
 
