@@ -71,7 +71,8 @@ Hermes poprawia każdą stronę i formularz CF7 sam; usuwanie (strony, formularz
       Wzór układu: 3 najnowsze opublikowane LP. Wzór treści: LP z tej samej kategorii z najniższym CPL
       (reklamy Meta, ostatnie 90 dni, min. 5 leadów). Zapisuje pliki do pracy w ~/robocze/lp/<klient-zabieg>/
       (strona.html = kopia najnowszego LP do przepisania).
-  lp.sh media --nazwa "<firma zabieg>" <plik|folder|link> ...   zdjęcia do WP (WebP, max 1200 px) -> URL-e
+  lp.sh media --nazwa "<firma zabieg>" <plik|folder|link> ...   zdjęcia do WP (WebP, max 1200 px)
+        i wideo .mp4/.webm (bez konwersji) -> URL-e
   lp.sh opinie --booksy <link do profilu Booksy> [--ile 6] [--plik karty.html]   prawdziwe opinie 5★ z tekstem
         z publicznej strony Booksy (najnowsze ok. 10-15; tekst bez zmian) + HTML kart do sekcji opinii (zl-review).
         --z-pliku opinie.json [{tekst, imie, data}]: karty z opinii przepisanych z Booksy (starsze)
@@ -408,7 +409,7 @@ async function wszystkieFormularze() {
 
 async function media(args) {
   wymagaj(args, { nazwa: '--nazwa "<firma zabieg>" (nazwa plików i alt dla SEO)' });
-  const OBRAZ = /\.(jpe?g|png|webp|gif|avif)$/i;
+  const OBRAZ = /\.(jpe?g|png|webp|gif|avif|mp4|webm)$/i;
   const zrodla = [];
   for (const item of args._.slice(1)) {
     if (/^https?:\/\//i.test(item)) {
@@ -427,7 +428,7 @@ async function media(args) {
       );
     } else zrodla.push(p);
   }
-  if (!zrodla.length) blad("Podaj zdjęcia: pliki, foldery albo linki (fileuploader /view/ lub bezpośrednie).");
+  if (!zrodla.length) blad("Podaj zdjęcia lub wideo: pliki, foldery albo linki (fileuploader /view/ lub bezpośrednie).");
   const nazwa = localSlug(args.nazwa) || "lp";
   const dims = {};
   const out = [];

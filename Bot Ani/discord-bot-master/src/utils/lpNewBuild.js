@@ -183,6 +183,8 @@ export function normalizeFormShortcode(raw) {
 }
 
 const LOCAL_MIME = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", avif: "image/avif" };
+// Wideo (np. film w hero) idzie do WP bez konwersji i bez zmiany rozmiaru.
+const VIDEO_MIME = { mp4: "video/mp4", webm: "video/webm" };
 
 // Pobiera medium (fileuploader /view/, dowolny http[s] albo plik lokalny - CLI), konwertuje do
 // WebP + ogranicza szerokosc (strona ma byc szybka) i wgrywa do WP Media
@@ -192,7 +194,7 @@ const LOCAL_MIME = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", we
 // wgranego pliku - renderer dopisuje z tego width/height do <img>.
 export async function resolveMediaUrl(url, seoBase, imageDims = null) {
   const base = (WP_BASE_URL || "").replace(/\/$/, "");
-  if (base && url.startsWith(base) && /\.webp(\?|#|$)/i.test(url)) return url;
+  if (base && url.startsWith(base) && /\.(webp|mp4|webm)(\?|#|$)/i.test(url)) return url;
 
   const isLocal = !/^https?:\/\//i.test(url);
   const parsed = isLocal ? { type: "local" } : parseFileuploaderLink(url);
@@ -200,7 +202,8 @@ export async function resolveMediaUrl(url, seoBase, imageDims = null) {
   try {
     let buffer, contentType;
     if (isLocal) {
-      contentType = LOCAL_MIME[path.extname(url).slice(1).toLowerCase()];
+      const ext = path.extname(url).slice(1).toLowerCase();
+      contentType = LOCAL_MIME[ext] || VIDEO_MIME[ext];
       if (!contentType) throw new Error(`nieobsługiwany typ pliku: ${path.basename(url)}`);
       buffer = await readFile(url);
     } else if (parsed.type === "view") {
@@ -209,8 +212,16 @@ export async function resolveMediaUrl(url, seoBase, imageDims = null) {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       contentType = res.headers.get("content-type") || "";
-      if (!/^image\//i.test(contentType)) throw new Error(`odpowiedź to nie obraz (${contentType || "brak content-type"})`);
+      if (!/^(image|video)\//i.test(contentType)) throw new Error(`odpowiedź to nie obraz ani wideo (${contentType || "brak content-type"})`);
       buffer = Buffer.from(await res.arrayBuffer());
+    }
+
+    if (/^video\//i.test(contentType)) {
+      const mime = contentType.split(";")[0].trim().toLowerCase();
+      const ext = Object.keys(VIDEO_MIME).find((k) => VIDEO_MIME[k] === mime) || "mp4";
+      const up = await wpUploadMedia(buffer, `${seoBase}.${ext}`, mime, { altText: alt, title: alt });
+      if (imageDims && up.width && up.height) imageDims[up.sourceUrl] = { width: up.width, height: up.height };
+      return up.sourceUrl;
     }
 
     // 1200px: najszersze zdjecie na LP (hero) ma ~430px CSS, wiec 2x gestosc
