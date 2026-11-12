@@ -961,16 +961,10 @@ async function ustalOdbiorce(args, zPliku, tytul) {
     if (poprawnyOdbiorca(r)) adresy.add(r.trim());
   }
   if (adresy.size === 1) return { odbiorca: [...adresy][0], skad: `poprzednie formularze klienta ${kod}: ${poprzednie.map((f) => f.id).join(", ")}` };
-  blad(
-    "Nie znam adresu do powiadomień o zgłoszeniach (nie zgaduję). Podaj --odbiorca <email> z briefu / profilu klienta (_wiedza/klienci) " +
-      "albo potwierdzony przez człowieka. Do tego czasu na stronie zapis telefoniczny: --telefon-zamiast-formularza \"<nr>\".",
-    {
-      kod_klienta: kod,
-      poprzednie_formularze_klienta: poprzednie.map((f) => ({ id: f.id, tytul: f.title })),
-      adresy_w_poprzednich: [...adresy],
-      w_pliku_do: zPliku || null,
-    }
-  );
+  // Domyślnie skrzynka ITM, jak we wszystkich dotychczasowych formularzach CF7 (Szymon 12.11.2026: LP zawsze z formularzem,
+  // bez zapisu telefonicznego zamiast niego). Zmiana adresu: --odbiorca albo LP_DOMYSLNY_ODBIORCA.
+  const domyslny = (process.env.LP_DOMYSLNY_ODBIORCA || "agnieszka@inthemaking.pl").trim();
+  return { odbiorca: domyslny, skad: `domyślna skrzynka ITM (brak --odbiorca${kod ? ` i jednego adresu w formularzach ${kod}` : ""})` };
 }
 
 async function formularzUtworz(args) {

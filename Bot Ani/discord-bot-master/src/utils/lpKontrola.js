@@ -2,7 +2,7 @@
 //  1. wygląd = wzór układu (klasy zl-), 3 główne kolory marki klienta, jasne tła, max 1 ciemny pas,
 //  2. hero zawsze ze zdjęciem,
 //  3. sekcja opinii tylko z prawdziwymi opiniami (3-6 kart), inaczej bez sekcji,
-//  4. nigdy „Błąd: Brak formularza kontaktowego” (zaślepka CF7): formularz podpięty albo zapis telefoniczny.
+//  4. nigdy „Błąd: Brak formularza kontaktowego” (zaślepka CF7) ani zapisu telefonicznego zamiast formularza: zawsze formularz CF7.
 // Funkcje są czyste (sam HTML), bez WordPressa: CLI (hermes-lp.js) dokłada sprawdzenie id formularzy w CF7.
 
 import { formPlaceholders } from "./lpNewBuild.js";
@@ -271,7 +271,8 @@ export function kontrolaLp(html) {
   }
   const zastepcze = (html || "").match(ZASTEPCZY_RE) || [];
   if (!formy.length && !zastepcze.length) uwagi.push("Na stronie nie ma formularza CF7 ani zapisu telefonicznego: leady nie przyjdą.");
-  if (zastepcze.length) uwagi.push(`Zamiast formularza zapis telefoniczny (${zastepcze.length}×): po ustaleniu maila załóż formularz i lp.sh formularz-podepnij.`);
+  // Szymon 12.11.2026: LP zawsze z formularzem CF7 (domyślny odbiorca: skrzynka ITM), zapis telefoniczny zamiast formularza to błąd.
+  if (zastepcze.length) bledy.push({ rodzaj: "formularz", opis: `Zamiast formularza zapis telefoniczny (${zastepcze.length}×): załóż formularz (lp.sh formularz-utworz, domyślnie skrzynka ITM) i lp.sh formularz-podepnij.` });
 
   return {
     bledy,
