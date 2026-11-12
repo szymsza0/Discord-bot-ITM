@@ -99,11 +99,12 @@ export async function wpUploadMedia(buffer, filename, mimeType, { altText = "", 
 }
 
 /**
- * Creates a new WP page from the token-substituted content, always as a
- * draft (never auto-published - a human reviews it in wp-admin first). The
- * final Discord report builds its edit link from the returned id.
+ * Creates a new WP page. Domyślnie OPUBLIKOWANA (decyzja Szymona 12.11.2026:
+ * LP z !lp i od Hermesa idą od razu na żywo, z noindex - patrz lpNewBuild.js
+ * createLpPage, która dokłada noindex i znacznik narzędzia). `link` to adres
+ * publiczny (permalink), `editLink` - edycja w wp-admin.
  */
-export async function wpCreatePage({ title, content, status = "draft", slug, meta }) {
+export async function wpCreatePage({ title, content, status = "publish", slug, meta }) {
   const body = { title, content, status };
   if (slug) body.slug = slug;
   if (meta) body.meta = meta;
@@ -148,7 +149,25 @@ add_action('wp_head', function () {
   if (defined('WPSEO_VERSION') || defined('RANK_MATH_VERSION') || defined('AIOSEO_VERSION') || defined('SEOPRESS_VERSION')) return;
   $d = get_post_meta(get_queried_object_id(), '${META_DESCRIPTION_KEY}', true);
   if ($d) echo '<meta name="description" content="' . esc_attr($d) . '">' . "\\n";
-}, 1);`;
+}, 1);
+// LP z narzedzia ITM (znacznik itm-lp w _kad_post_classname): noindex, nofollow w <head> i poza mapa strony.
+add_filter('wp_robots', function ($robots) {
+  if (is_singular('page') && strpos((string) get_post_meta(get_queried_object_id(), '_kad_post_classname', true), 'itm-lp') !== false) {
+    $robots['noindex'] = true;
+    $robots['nofollow'] = true;
+  }
+  return $robots;
+});
+add_filter('wp_sitemaps_posts_query_args', function ($args, $post_type) {
+  if ($post_type === 'page') {
+    $args['meta_query'] = array(
+      'relation' => 'OR',
+      array('key' => '_kad_post_classname', 'compare' => 'NOT EXISTS'),
+      array('key' => '_kad_post_classname', 'value' => 'itm-lp', 'compare' => 'NOT LIKE'),
+    );
+  }
+  return $args;
+}, 10, 2);`;
 
 // Ten sam kod do recznego wklejenia (np. WPCode -> PHP Snippet, Run Everywhere),
 // gdy na stronie nie ma wtyczki Code Snippets z REST API.

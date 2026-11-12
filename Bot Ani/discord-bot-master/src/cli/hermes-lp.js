@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // CLI dla Hermesa (agent ITM na serwerze): landing page na zapisy-beauty.pl wzorowany na żywych LP,
 // nie na szablonach stary/nowy z !lp. Tekst i HTML strony pisze sam agent (jak w hermes-skrypty.js),
-// CLI daje kontekst (wzory, brief, wytyczne), wgrywa zdjęcia i zakłada stronę ZAWSZE jako szkic.
+// CLI daje kontekst (wzory, brief, wytyczne), wgrywa zdjęcia i PUBLIKUJE stronę od razu, z noindex
+// (decyzja Szymona 12.11.2026: klientka akceptuje LP z publicznego linku, w Meta podpinamy ją po akceptacji).
 // Uruchamiany przez ~/itm-os/agent/lp.sh (dane: Google z google.env, WordPress z Railway, CPL z Meta).
 // Wynik: JSON na stdout; postęp i logi na stderr.
 //
@@ -9,25 +10,38 @@
 //            [--uklad auto|<id|url>,...] [--wyniki plik.json] [--katalog DIR]
 //   media    --nazwa "<firma zabieg>" <plik|folder|link> ...
 //   utworz   --html strona.html --tytul "..." --zabieg "..." [--opis "..."] [--klient ...] [--brief link]
-//            [--slug ...] [--strona <id szkicu do nadpisania>] [--czyj "Hermes (Imię)"] [--bez-arkusza]
+//            [--slug ...] [--strona <id do poprawki>] [--czyj "Hermes (Imię)"] [--bez-arkusza] [--proba]
 //   formularze [--szukaj ...]
 //   sprawdz <id>
+//   noindex --lista [--wszystkie] | noindex <id> ... [--proba] [--wymus]
 //   fragment-seo [--php]
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { GOOGLE_LP_SHEET_ID, WP_BASE_URL } from "../config.js";
-import { upsertLPRow } from "../utils/lpSheet.js";
-import { wpFetch, wpCreatePage, isMetaDescriptionRegistered, META_DESCRIPTION_SNIPPET_PHP } from "../utils/wordpressClient.js";
+import { upsertLPRow, listLPPages } from "../utils/lpSheet.js";
+import { wpFetch, isMetaDescriptionRegistered, META_DESCRIPTION_SNIPPET_PHP } from "../utils/wordpressClient.js";
 import { fetchDocPlainText } from "../utils/googleDocs.js";
 import { getLPTemplate } from "../utils/lpTemplate.js";
 import { wrapWpHtmlBlock } from "../utils/lpNewTemplate.js";
-import { resolveMediaUrl, localSlug, seoMeta, ensureSeoSnippet } from "../utils/lpNewBuild.js";
+import {
+  resolveMediaUrl,
+  localSlug,
+  seoMeta,
+  ensureSeoSnippet,
+  createLpPage,
+  withNoindex,
+  hasNoindex,
+  isLpToolPage,
+  formPlaceholders,
+  LP_MARKER,
+} from "../utils/lpNewBuild.js";
 
 // Biblioteki logują przez console.log; stdout jest zarezerwowany na JSON wyniku.
 console.log = (...a) => console.error(...a);
 
-const POMOC = `Landing page na zapisy-beauty.pl, wzorowany na żywych LP (szkic, nigdy publikacja).
+const POMOC = `Landing page na zapisy-beauty.pl, wzorowany na żywych LP. Strona idzie od razu na żywo, z noindex:
+link publiczny do akceptacji klientki, w reklamach Meta dopiero po jej akceptacji.
 
   lp.sh kontekst --zabieg "<zabieg/oferta>" --brief <link Google Doc | plik .md/.txt> [--klient "<nazwa>"]
         [--kategoria cialo|twarz|depilacja|wlosy|szkolenia] [--wzor auto|<id|url>] [--uklad auto|<id|url>,...]
@@ -36,12 +50,22 @@ const POMOC = `Landing page na zapisy-beauty.pl, wzorowany na żywych LP (szkic,
       (strona.html = kopia najnowszego LP do przepisania).
   lp.sh media --nazwa "<firma zabieg>" <plik|folder|link> ...   zdjęcia do WP (WebP, max 1200 px) -> URL-e
   lp.sh utworz --html <strona.html> --tytul "..." --zabieg "..." [--opis "<meta description>"] [--klient ...]
-        [--brief <link>] [--slug ...] [--strona <id szkicu: poprawka zamiast nowej strony>] [--czyj "Hermes (Imię)"]
-        [--bez-arkusza]
+        [--brief <link>] [--slug ...] [--strona <id: poprawka zamiast nowej strony>] [--czyj "Hermes (Imię)"]
+        [--bez-arkusza] [--proba]
+      Publikuje (noindex, nofollow) i zwraca link publiczny. Zaślepka formularza / zdjęcia albo formularz
+      innego klienta nie wstrzymują publikacji: są w do_poprawy_przed_meta (poprawić przed reklamą w Meta).
+      --strona: szkic albo opublikowana LP z tego narzędzia (znacznik itm-lp); poprzednia treść zostaje
+      w rewizji WP i w ~/robocze/lp/kopie. Opublikowanych stron spoza narzędzia nie rusza.
+      --proba: tylko sprawdza i opisuje, co by zrobił; nic nie zapisuje.
   lp.sh formularze [--szukaj "<fragment tytułu>"]      formularze Contact Form 7 (shortcode)
-  lp.sh sprawdz <id>                                   status, tytuł, tokeny, formularze, zdjęcia
+  lp.sh sprawdz <id>                                   status, link, noindex, tokeny, formularze, zdjęcia
+  lp.sh noindex --lista [--wszystkie]                  LP z arkusza Baza LP (--wszystkie: + wszystkie opublikowane
+                                                       LP na zapisy-beauty.pl): czy mają noindex
+  lp.sh noindex <id> ... [--proba] [--wymus]           dopisuje noindex (status strony bez zmian; tylko LP:
+      z Baza LP, opublikowane LP albo ze znacznikiem narzędzia; inne strony z --wymus)
   lp.sh fragment-seo [--php]                           czy WP przyjmuje meta description (--opis); --php = kod
-      fragmentu do jednorazowego wklejenia w WPCode (PHP Snippet, Run Everywhere), gdy nie przyjmuje`;
+      fragmentu do jednorazowego wklejenia w WPCode (PHP Snippet, Run Everywhere), gdy nie przyjmuje
+      (ten sam fragment daje noindex w <head> i wyłącza LP z wp-sitemap.xml)`;
 
 const KATEGORIE = ["szkolenia", "depilacja", "wlosy", "cialo", "twarz"];
 // Kolejność = pierwszeństwo przy remisie (np. „usuwanie owłosienia” to depilacja, nie włosy).
@@ -373,58 +397,128 @@ async function media(args) {
   wynik({ ok: out.every((o) => !o.blad), media: out });
 }
 
+// Kopia treści strony przed nadpisaniem (obok rewizji WP): ~/robocze/lp/kopie/<id>-<data>.html
+function kopiaLokalna(id, raw) {
+  const kat = path.join(os.homedir(), "robocze", "lp", "kopie");
+  fs.mkdirSync(kat, { recursive: true });
+  const plik = path.join(kat, `${id}-${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}.html`);
+  fs.writeFileSync(plik, raw || "");
+  return plik;
+}
+
+// WP zapisuje rewizję przy każdej zmianie treści/tytułu; szukamy tej z treścią sprzed nadpisania.
+async function rewizjaZTrescia(id, raw) {
+  const rew = await wpFetch(`/wp/v2/pages/${id}/revisions?context=edit&per_page=10&_fields=id,date,content`).catch(() => []);
+  const r = (Array.isArray(rew) ? rew : []).find((x) => (x.content?.raw ?? "") === (raw ?? ""));
+  return r ? { id: r.id, data: r.date } : null;
+}
+
+const NASTEPNY_KROK =
+  "Link publiczny wyślij klientce do akceptacji. W reklamach Meta podpinamy LP dopiero po jej akceptacji i po poprawieniu listy do_poprawy_przed_meta.";
+
 async function utworz(args) {
   wymagaj(args, { html: "--html <plik strony>", tytul: '--tytul "<tytuł strony>"', zabieg: '--zabieg "<zabieg/oferta>"' });
   const plik = sciezka(args.html);
   if (!fs.existsSync(plik)) blad(`Nie ma pliku: ${args.html}`);
   const html = fs.readFileSync(plik, "utf8");
   if (html.trim().length < 1000) blad("Plik strony jest prawie pusty.");
-  const content = /<!--\s*wp:/.test(html) ? html : wrapWpHtmlBlock(html);
+  const content = withNoindex(/<!--\s*wp:/.test(html) ? html : wrapWpHtmlBlock(html));
   const opis = str(args.opis);
+  const proba = !!args.proba;
 
-  // Kontrola przed zapisem
+  // Kontrola przed zapisem. Nie blokuje publikacji (klientka akceptuje LP z publicznego linku),
+  // ale to trzeba poprawić, zanim LP trafi do reklamy w Meta.
+  const doPoprawy = [];
   const uwagi = [];
   const tokeny = [...new Set(html.match(/\{\{[^}]+\}\}/g) || [])];
-  if (tokeny.length) uwagi.push(`Niewypełnione pola: ${tokeny.join(", ")}`);
+  if (tokeny.length) doPoprawy.push(`Niewypełnione pola: ${tokeny.join(", ")}`);
   const formy = formularzeWHtml(html);
-  if (!formy.length) uwagi.push("Na stronie nie ma formularza CF7 (shortcode [contact-form-7 ...]).");
-  const zaslepki = formy.filter((f) => /X{3,}|DO PODPI/i.test(f));
-  if (zaslepki.length) uwagi.push(`Formularz do podpięcia: ${zaslepki.join(" ")} (lp.sh formularze; nowy formularz zakłada człowiek w CF7)`);
+  if (!formy.length) doPoprawy.push("Na stronie nie ma formularza CF7 (shortcode [contact-form-7 ...]): leady nie przyjdą.");
+  const zaslepki = formPlaceholders(html);
+  if (zaslepki.length) {
+    doPoprawy.push(`Formularz do podpięcia: ${zaslepki.join(" ")} (leady nie przyjdą; lp.sh formularze, nowy formularz zakłada człowiek w CF7)`);
+  }
   const kontekstPlik = path.join(path.dirname(plik), "kontekst.json");
   if (fs.existsSync(kontekstPlik)) {
     try {
       const { slady } = JSON.parse(fs.readFileSync(kontekstPlik, "utf8"));
       const stareObrazy = (slady?.obrazy || []).filter((u) => html.includes(u));
-      if (stareObrazy.length) uwagi.push(`Zdjęcia ze wzoru (inny klient) wciąż na stronie: ${stareObrazy.length} (np. ${stareObrazy[0]})`);
+      if (stareObrazy.length) doPoprawy.push(`Zdjęcia ze wzoru (inny klient) wciąż na stronie: ${stareObrazy.length} (np. ${stareObrazy[0]})`);
       const stareFormy = (slady?.formularze || []).filter((f) => html.includes(f) && !/X{3,}|DO PODPI/i.test(f));
-      if (stareFormy.length) uwagi.push(`Formularz innego klienta ze wzoru: ${stareFormy.join(" ")}`);
+      if (stareFormy.length) doPoprawy.push(`Formularz innego klienta ze wzoru (leady trafią do niego): ${stareFormy.join(" ")}`);
     } catch {
       /* brak śladów = brak kontroli */
     }
   }
   if (!opis) uwagi.push("Brak meta description (--opis).");
 
-  let page;
+  // --strona <id>: poprawka zamiast nowej strony. Szkic: zawsze (po poprawce idzie na żywo).
+  // Opublikowana: tylko ze znacznikiem narzędzia LP (meta _kad_post_classname = itm-lp itm-lp-<id>, patrz lpNewBuild.js).
   const stronaId = str(args.strona);
+  let obecna = null;
   if (stronaId) {
-    // Poprawka istniejącego SZKICU; opublikowanej strony CLI nie rusza.
-    const obecna = await wpFetch(`/wp/v2/pages/${stronaId}?context=edit&_fields=id,status`);
-    if (obecna.status === "publish") blad(`Strona ${stronaId} jest opublikowana: CLI poprawia tylko szkice. Zmiany na żywej stronie robi człowiek.`);
-    await ensureSeoSnippet();
-    const body = { title: args.tytul.trim(), content, status: "draft" };
-    if (str(args.slug)) body.slug = args.slug.trim();
-    if (opis) body.meta = seoMeta({ seo: { metaDescription: opis } });
-    const zap = await wpFetch(`/wp/v2/pages/${stronaId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    page = { id: zap.id, editLink: edycja(zap.id) };
-  } else {
-    await ensureSeoSnippet();
-    page = await wpCreatePage({
+    if (!/^\d+$/.test(stronaId)) blad(`--strona: podaj numer strony WP, nie ${stronaId}`);
+    obecna = await wpFetch(`/wp/v2/pages/${stronaId}?context=edit&_fields=id,status,link,title,meta,content`);
+    if (obecna.status === "trash") blad(`Strona ${stronaId} jest w koszu.`);
+    if (obecna.status === "publish" && !isLpToolPage(obecna)) {
+      blad(
+        `Strona ${stronaId} jest opublikowana i nie powstała w narzędziu LP (brak znacznika ${LP_MARKER}-${stronaId}). ` +
+          "Zmiany na niej robi człowiek w wp-admin; nową wersję załóż bez --strona."
+      );
+    }
+  }
+
+  const akcja = !obecna
+    ? "nowa strona, od razu opublikowana"
+    : obecna.status === "publish"
+    ? `nadpisanie opublikowanej LP ${obecna.id} z narzędzia (poprzednia treść: rewizja WP + kopia w ~/robocze/lp/kopie)`
+    : `poprawka strony ${obecna.id} (${obecna.status}) i publikacja`;
+
+  if (proba) {
+    wynik({
+      ok: true,
+      proba: true,
+      uwaga: "Próba: nic nie zapisano w WordPress ani w arkuszu.",
+      akcja,
+      strona: obecna
+        ? { id: obecna.id, status_teraz: obecna.status, status_po: "publish", tytul_teraz: obecna.title?.raw, link: obecna.link, z_narzedzia_lp: isLpToolPage(obecna) }
+        : { status_po: "publish", tytul: args.tytul.trim() },
+      noindex: hasNoindex(html) ? "już w HTML strony" : "dodany blok noindex, nofollow na początku strony",
+      formularze: formy,
+      zdjecia: obrazy(html).length,
+      do_poprawy_przed_meta: doPoprawy,
+      uwagi,
+      arkusz_baza_lp: args["bez-arkusza"] ? "pominięty (--bez-arkusza)" : "zostałby zaktualizowany",
+    });
+  }
+
+  await ensureSeoSnippet();
+  const seo = opis ? seoMeta({ seo: { metaDescription: opis } }) : {};
+  let page;
+  let poprzednia = null;
+  if (obecna) {
+    const kopia = kopiaLokalna(obecna.id, obecna.content?.raw);
+    const klasy = String(obecna.meta?._kad_post_classname || "")
+      .split(/\s+/)
+      .filter((c) => c && c !== LP_MARKER && !c.startsWith(`${LP_MARKER}-`));
+    const body = {
       title: args.tytul.trim(),
       content,
-      status: "draft",
-      slug: str(args.slug) || undefined,
-      meta: opis ? seoMeta({ seo: { metaDescription: opis } }) : undefined,
-    });
+      status: "publish",
+      meta: { ...seo, _kad_post_classname: [...klasy, LP_MARKER, `${LP_MARKER}-${obecna.id}`].join(" ") },
+    };
+    if (str(args.slug)) body.slug = args.slug.trim();
+    const zap = await wpFetch(`/wp/v2/pages/${obecna.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    page = { id: zap.id, link: zap.link, editLink: edycja(zap.id), oznaczona: true };
+    const rew = await rewizjaZTrescia(obecna.id, obecna.content?.raw);
+    poprzednia = {
+      status: obecna.status,
+      rewizja_wp: rew ? `#${rew.id} z ${rew.data} (wp-admin -> Wersje, można przywrócić)` : "nie znalazłem rewizji z poprzednią treścią: została tylko kopia lokalna",
+      kopia_lokalna: kopia,
+    };
+  } else {
+    page = await createLpPage({ title: args.tytul.trim(), content, slug: str(args.slug) || undefined, meta: opis ? seo : undefined });
+    if (!page.oznaczona) uwagi.push("Nie zapisał się znacznik narzędzia LP: późniejsza poprawka przez --strona nie przejdzie, poprawia człowiek w wp-admin.");
   }
 
   if (opis) {
@@ -453,14 +547,25 @@ async function utworz(args) {
       uwagi.push(`Strona zapisana, ale nie udało się zaktualizować arkusza Baza LP: ${err.message}`);
     }
   }
-  uwagi.push("Publikacja: strona jest szkicem; publikuje człowiek w wp-admin albo Hermes po wyraźnym „tak”.");
 
   wynik({
     ok: true,
-    strona: { id: page.id, status: "draft", tytul: args.tytul.trim(), podglad: podglad(page.id), edycja: page.editLink, poprawka: !!stronaId },
+    strona: {
+      id: page.id,
+      status: "publish",
+      tytul: args.tytul.trim(),
+      link: page.link,
+      edycja: page.editLink,
+      noindex: true,
+      z_narzedzia_lp: page.oznaczona !== false,
+      poprawka: !!obecna,
+    },
+    ...(poprzednia ? { poprzednia_wersja: poprzednia } : {}),
     formularze: formy,
     zdjecia: obrazy(html).length,
-    do_zrobienia: uwagi,
+    do_poprawy_przed_meta: doPoprawy,
+    uwagi,
+    nastepny_krok: NASTEPNY_KROK,
     arkusz_baza_lp: arkusz,
   });
 }
@@ -482,15 +587,124 @@ async function sprawdz(args) {
     status: p.status,
     tytul: p.title?.raw,
     zmieniona: p.modified,
-    podglad: p.status === "publish" ? p.link : podglad(p.id),
+    link: p.status === "publish" ? p.link : podglad(p.id),
     edycja: edycja(p.id),
+    noindex: hasNoindex(raw),
+    z_narzedzia_lp: isLpToolPage(p),
     meta_description: p.meta?.itm_meta_description || null,
     dlugosc_html: raw.length,
     pozostale_tokeny: [...new Set(raw.match(/\{\{[^}]+\}\}/g) || [])],
     formularze: formularzeWHtml(raw),
+    formularze_do_podpiecia: formPlaceholders(raw),
     zdjecia: obrazy(raw).length,
     sekcje: zarys(raw),
   });
+}
+
+/** Id strony z linku w Baza LP (edycja ?post=, podgląd ?page_id=, albo adres publiczny -> slug). */
+async function idZLinku(link) {
+  const m = link.match(/[?&](?:post|page_id|p)=(\d+)/);
+  if (m) return Number(m[1]);
+  let slug;
+  try {
+    const u = new URL(link);
+    if (u.origin !== new URL(base()).origin) return null;
+    slug = u.pathname.split("/").filter(Boolean).pop();
+  } catch {
+    return null;
+  }
+  if (!slug) return null;
+  const r = await wpFetch(`/wp/v2/pages?slug=${encodeURIComponent(slug)}&status=publish,draft,pending,private&_fields=id`).catch(() => []);
+  return r[0]?.id || null;
+}
+
+async function lpZArkusza() {
+  const wiersze = await listLPPages(GOOGLE_LP_SHEET_ID);
+  const out = [];
+  for (const w of wiersze) out.push({ ...w, id: await idZLinku(w.strona) });
+  return out;
+}
+
+// noindex na LP założonych przed 12.11.2026 (wtedy jeszcze bez noindex). Status strony się nie zmienia.
+async function noindex(args) {
+  const ids = args._.slice(1).map(Number).filter(Boolean);
+  if (args.lista || !ids.length) {
+    const wiersze = await lpZArkusza();
+    // --wszystkie: też opublikowane LP spoza arkusza (robione ręcznie), bez strony głównej i polityki
+    if (args.wszystkie) {
+      for (const l of await landingi()) wiersze.push({ wiersz: null, klient: "", zabieg: "(spoza Baza LP)", strona: l.link, id: l.id });
+    }
+    const lista = [];
+    const bezStrony = [];
+    const widziane = new Set();
+    for (const w of wiersze) {
+      if (!w.id) {
+        bezStrony.push({ wiersz: w.wiersz, zabieg: w.zabieg, strona: w.strona });
+        continue;
+      }
+      if (widziane.has(w.id)) continue;
+      widziane.add(w.id);
+      const p = await wpFetch(`/wp/v2/pages/${w.id}?context=edit&_fields=id,status,title,link,content,meta`).catch((e) => ({ id: w.id, blad: e.message }));
+      lista.push({
+        id: w.id,
+        wiersz: w.wiersz,
+        klient: w.klient,
+        zabieg: w.zabieg,
+        status: p.status || null,
+        tytul: p.title?.raw || null,
+        link: p.link || null,
+        noindex: p.content ? hasNoindex(p.content.raw) : null,
+        z_narzedzia_lp: p.meta ? isLpToolPage(p) : null,
+        ...(p.blad ? { blad: p.blad } : {}),
+      });
+    }
+    const bez = lista.filter((p) => p.noindex === false && p.status !== "trash");
+    wynik({
+      ok: true,
+      liczba: lista.length,
+      bez_noindex: bez.length,
+      do_uruchomienia: bez.length ? `lp.sh noindex ${bez.map((p) => p.id).join(" ")}` : null,
+      strony: lista,
+      wiersze_bez_strony_wp: bezStrony,
+    });
+  }
+
+  let dozwolone = null;
+  if (!args.wymus) {
+    dozwolone = new Set((await lpZArkusza()).map((w) => w.id).filter(Boolean));
+    for (const l of await landingi()) dozwolone.add(l.id);
+  }
+  const out = [];
+  for (const id of ids) {
+    try {
+      const p = await wpFetch(`/wp/v2/pages/${id}?context=edit&_fields=id,status,title,link,content,meta`);
+      const raw = p.content?.raw || "";
+      const wpis = { id, status: p.status, tytul: p.title?.raw, link: p.link };
+      if (hasNoindex(raw)) {
+        out.push({ ...wpis, wynik: "już ma noindex" });
+        continue;
+      }
+      if (dozwolone && !dozwolone.has(id) && !isLpToolPage(p)) {
+        out.push({ ...wpis, wynik: "pominięta: to nie LP (nie ma jej w Baza LP, wśród opublikowanych LP ani znacznika narzędzia; świadomie: --wymus)" });
+        continue;
+      }
+      if (args.proba) {
+        out.push({ ...wpis, wynik: "próba: dopisałbym noindex" });
+        continue;
+      }
+      const kopia = kopiaLokalna(id, raw);
+      await wpFetch(`/wp/v2/pages/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: withNoindex(raw) }),
+      });
+      const po = await wpFetch(`/wp/v2/pages/${id}?context=edit&_fields=content`);
+      out.push({ ...wpis, wynik: hasNoindex(po.content?.raw) ? "dopisany noindex" : "BŁĄD: noindex nie zapisał się", kopia_lokalna: kopia });
+    } catch (err) {
+      out.push({ id, wynik: `BŁĄD: ${err.message}` });
+    }
+  }
+  wynik({ ok: out.every((o) => !String(o.wynik).startsWith("BŁĄD")), proba: !!args.proba, strony: out });
 }
 
 async function fragmentSeo(args) {
@@ -503,7 +717,7 @@ async function fragmentSeo(args) {
     ok: true,
     zarejestrowany,
     uwaga: zarejestrowany
-      ? "WP przyjmuje meta description: --opis zapisze się w szkicu."
+      ? "WP przyjmuje meta description: --opis zapisze się na stronie."
       : "WP nie przyjmuje meta description. Człowiek z dostępem admina wkleja raz kod z `lp.sh fragment-seo --php` w WPCode (Add Snippet -> PHP Snippet, Auto Insert: Run Everywhere, Active).",
   });
 }
@@ -515,7 +729,7 @@ async function main() {
     process.stdout.write(POMOC + "\n");
     return;
   }
-  const polecenia = { kontekst, media, utworz, formularze, sprawdz, "fragment-seo": fragmentSeo };
+  const polecenia = { kontekst, media, utworz, formularze, sprawdz, noindex, "fragment-seo": fragmentSeo };
   if (!polecenia[cmd]) blad(`Nieznane polecenie: ${cmd}. Dostępne: ${Object.keys(polecenia).join(", ")} (lp.sh --help).`);
   return polecenia[cmd](args);
 }

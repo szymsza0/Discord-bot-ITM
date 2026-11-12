@@ -153,6 +153,22 @@ async function getDataRows(spreadsheetId) {
 }
 
 /**
+ * Wiersze Baza LP z linkiem do strony (kolumna Strona / Link do LP) - lista LP
+ * założonych przez !lp i Hermesa, np. dla `lp.sh noindex --lista`.
+ */
+export async function listLPPages(spreadsheetId) {
+  const { rows, columnMap, startRow } = await getDataRows(spreadsheetId);
+  return rows
+    .map((row, i) => ({
+      wiersz: startRow + i,
+      klient: columnMap.klient !== undefined ? (row[columnMap.klient] || "").trim() : "",
+      zabieg: (row[columnMap.zabieg] || "").trim(),
+      strona: (row[columnMap.strona] || "").trim(),
+    }))
+    .filter((r) => r.strona);
+}
+
+/**
  * Returns the brief link (NOT the finished page) of the first existing LP row
  * for the same "Zabieg" - used purely as a style/tone reference for
  * generateLPCopy, same anti-copying principle as !skrypt's reference script:

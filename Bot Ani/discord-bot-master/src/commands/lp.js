@@ -13,7 +13,7 @@ import {
 } from "../utils/fileuploaderMedia.js";
 import { matchMediaToSlots, MediaMatchError, DEFAULT_MEDIA_SLOTS } from "../utils/mediaMatcher.js";
 import { buildPageContent } from "../utils/lpContentBuilder.js";
-import { wpGetPageRawContent, wpUploadMedia, wpCreatePage, wpUpsertSnippet } from "../utils/wordpressClient.js";
+import { wpGetPageRawContent, wpUploadMedia, wpUpsertSnippet } from "../utils/wordpressClient.js";
 import { buildWebhookSnippetCode, slugify } from "./webhook.js";
 import { optimizeToWebp } from "../utils/imageOptimize.js";
 import {
@@ -26,7 +26,16 @@ import {
   ensureSeoSnippet,
   splitLinks,
   normalizeFormShortcode,
+  createLpPage,
+  formPlaceholders,
 } from "../utils/lpNewBuild.js";
+
+// Strona idzie od razu na żywo (noindex): klientka akceptuje ją z publicznego linku,
+// a w reklamach Meta podpinamy ją dopiero po akceptacji (decyzja Szymona 12.11.2026).
+const LP_PUBLIKACJA =
+  "Strona opublikowana (noindex, nie zbiera ruchu z Google). Link wyślij klientce do akceptacji; w reklamach Meta podpinamy ją dopiero po akceptacji.";
+const linkiLp = (page) =>
+  `[Strona (publiczna)](${page.link || page.editLink})\n[Edytuj w WP](${page.editLink})\n📊 [Arkusz Baza LP](${SHEET_URL})`;
 
 const SHEET_URL = `https://docs.google.com/spreadsheets/d/${GOOGLE_LP_SHEET_ID}/edit`;
 const TEXT_PROMPT_TIMEOUT_MS = 90000;
@@ -359,7 +368,7 @@ async function runNewLpFlow(message, { inline }) {
     embeds: [infoEmbed("⏳ Nowy szablon: pobieram brief i wytyczne...")],
   });
 
-  // Rdzeń (brief -> copy -> media -> szkic WP) jest wspólny z CLI Hermesa: utils/lpNewBuild.js.
+  // Rdzeń (brief -> copy -> media -> publikacja WP) jest wspólny z CLI Hermesa: utils/lpNewBuild.js.
   let result;
   try {
     result = await buildNewLp({
@@ -439,11 +448,15 @@ async function runNewLpFlow(message, { inline }) {
   const pageUrl = page.link || page.editLink;
   const finalEmbed = new EmbedBuilder()
     .setColor(needs.length ? "#FFA500" : "#00FF00")
-    .setTitle(needs.length ? "🎊 LP gotowa - zerknij, czego nie udało się zrobić" : "🎊 LP (nowy szablon) wdrożona")
+    .setTitle(needs.length ? "🎊 LP opublikowana - zerknij, co poprawić przed Meta" : "🎊 LP (nowy szablon) opublikowana")
+    .setDescription(LP_PUBLIKACJA)
     .addFields(
       { name: "✅ Zrobione", value: fv(truncate(done.join("\n"), 1000)) },
-      { name: "⚠️ Czego nie udało się zrobić / do sprawdzenia", value: fv(truncate(needs.join("\n") || "Nic, wszystko poszło.", 1000)) },
-      { name: "🔗 Linki", value: fv(`[Strona (podgląd)](${pageUrl})\n[Edytuj szkic](${page.editLink})\n📊 [Arkusz Baza LP](${SHEET_URL})`) }
+      {
+        name: "⚠️ Do poprawy przed podpięciem w Meta / do sprawdzenia",
+        value: fv(truncate(needs.join("\n") || "Nic, wszystko poszło.", 1000)),
+      },
+      { name: "🔗 Linki", value: fv(linkiLp(page)) }
     )
     .setFooter({ text: "Czegoś brakuje albo coś poprawić? Napisz, dorzucę." });
 
@@ -770,10 +783,9 @@ export async function processLpCommand(message) {
     await ensureSeoSnippet();
     let page;
     try {
-      page = await wpCreatePage({
+      page = await createLpPage({
         title: copy.seo?.title || `${zabieg} - ${copy.business?.name || ""}`.trim(),
         content: pageContent,
-        status: "draft",
         meta: seoMeta(copy),
       });
     } catch (err) {
@@ -806,15 +818,19 @@ export async function processLpCommand(message) {
 
     const implementedLines = [];
     if (copy.business?.name) implementedLines.push(`Firma: ${copy.business.name}`);
-    implementedLines.push("Copy (hero, oferta, USP i pozostałe wypełnione pola) - patrz szkic.");
+    implementedLines.push("Copy (hero, oferta, USP i pozostałe wypełnione pola) - patrz strona.");
     if (filledMediaSlots.length) implementedLines.push(`Media wgrane do slotów: ${filledMediaSlots.join(", ")}`);
 
     const placeholderLines = [
+      ...formPlaceholders(pageContent).map((f) => `Formularz do podpięcia przed reklamą w Meta: ${f} (leady z tej LP nie przyjdą)`),
       ...remainingTokens.map((t) => `Token bez danych: ${t}`),
       ...unmatchedRequiredSlots.map((s) => `Brak pliku dla slotu: ${s}`),
       ...uploadFailures.map((s) => `Błąd wgrywania pliku dla slotu: ${s}`),
       ...skipped.map((s) => `Pominięty plik (nieobsługiwany format ${s.contentType}): ${s.url}`),
     ];
+    if (page.oznaczona === false) {
+      placeholderLines.push("Brak znacznika narzędzia LP (meta strony): poprawki tej strony tylko ręcznie w wp-admin");
+    }
     if (assumptions.length) {
       placeholderLines.push(
         `Założenia AI do sprawdzenia (${assumptions.length}): ${assumptions.slice(0, 15).join(", ")}${
@@ -826,11 +842,15 @@ export async function processLpCommand(message) {
     const pageUrl = page.link || page.editLink;
     const finalEmbed = new EmbedBuilder()
       .setColor(placeholderLines.length ? "#FFA500" : "#00FF00")
-      .setTitle(placeholderLines.length ? "🎊 LP wdrożona (są placeholdery)" : "🎊 LP wdrożona")
+      .setTitle(placeholderLines.length ? "🎊 LP opublikowana (są placeholdery - popraw przed Meta)" : "🎊 LP opublikowana")
+      .setDescription(LP_PUBLIKACJA)
       .addFields(
         { name: "✅ Wdrożono", value: truncate(implementedLines.join("\n") || "—", 1000) },
-        { name: "⚠️ Czego nie udało się zrobić / do sprawdzenia", value: truncate(placeholderLines.join("\n") || "Nic, wszystko poszło.", 1000) },
-        { name: "🔗 Linki", value: `[Strona (podgląd)](${pageUrl})\n[Edytuj szkic](${page.editLink})\n📊 [Arkusz Baza LP](${SHEET_URL})` }
+        {
+          name: "⚠️ Do poprawy przed podpięciem w Meta / do sprawdzenia",
+          value: truncate(placeholderLines.join("\n") || "Nic, wszystko poszło.", 1000),
+        },
+        { name: "🔗 Linki", value: linkiLp(page) }
       )
       .setFooter({ text: "Czegoś brakuje albo coś poprawić? Napisz, dorzucę." });
 

@@ -7,13 +7,13 @@ import { ASSUMPTION_MARKER } from "./lpGenerator.js";
 import { generateNewLpCopy, NewLPGenerationError } from "./lpNewGenerator.js";
 import { getNewLpTemplate, renderNewTemplate, mapNewCopyToTemplate, wrapWpHtmlBlock } from "./lpNewTemplate.js";
 import { downloadFileuploaderBuffer, parseFileuploaderLink, fileuploaderDirect } from "./fileuploaderMedia.js";
-import { wpUploadMedia, wpCreatePage, ensureMetaDescriptionSnippet, META_DESCRIPTION_KEY } from "./wordpressClient.js";
+import { wpFetch, wpUploadMedia, wpCreatePage, ensureMetaDescriptionSnippet, META_DESCRIPTION_KEY } from "./wordpressClient.js";
 import { optimizeToWebp, extForMime } from "./imageOptimize.js";
 import { generatePalette } from "./lpPalette.js";
 
 /**
  * Rdzeń przepływu „nowy szablon” (lp-new-v1) komendy !lp, bez Discorda:
- * brief -> copy (Claude) -> paleta -> media do WP -> szkic strony (zawsze draft).
+ * brief -> copy (Claude) -> paleta -> media do WP -> strona OPUBLIKOWANA z noindex (createLpPage).
  * Używa go src/commands/lp.js; CLI Hermesa (src/cli/hermes-lp.js) bierze stąd obsługę mediów i SEO.
  * Arkusz Baza LP i webhook zostają po stronie wywołującego.
  */
@@ -69,6 +69,81 @@ export async function ensureSeoSnippet() {
   } catch (err) {
     console.warn("[lp] nie udalo sie zapewnic fragmentu meta description:", err.message);
   }
+}
+
+/* ==========================================================================
+ *  Publikacja LP (decyzja Szymona 12.11.2026): strona z !lp i od Hermesa idzie
+ *  od razu jako OPUBLIKOWANA - klientka akceptuje ją z publicznego linku (nie ma
+ *  dostępu do wp-admin), a w reklamach Meta podpinamy ją dopiero po akceptacji.
+ *  Każda LP ma noindex, nofollow: nie zbiera ruchu organicznego.
+ *
+ *  noindex: zapisy-beauty.pl nie ma wtyczki SEO (Yoast / Rank Math) ani Code
+ *  Snippets z REST, więc meta robots siedzi w treści strony: osobny blok wp:html
+ *  na początku (<meta name="robots"> + skrypt, który dokłada ten sam tag do
+ *  <head>; Google czyta też tagi dodane skryptem). Fragment PHP z
+ *  `lp.sh fragment-seo --php` (wklejony raz w WPCode) dodaje noindex w <head>
+ *  i wyłącza LP z wp-sitemap.xml - wtedy po stronie serwera.
+ *
+ *  Znacznik „strona z narzędzia LP”: meta Kadence `_kad_post_classname` (jedyne
+ *  meta stron zarejestrowane w REST na tym WP) = "itm-lp itm-lp-<id>". Klasa z
+ *  własnym id: kopia strony zrobiona w wp-admin (duplikator kopiuje meta) ma
+ *  inne id, więc znacznika nie przejmuje. Tylko strony ze znacznikiem CLI
+ *  nadpisuje, gdy są opublikowane. Skutek uboczny: klasy CSS na <body>.
+ * ========================================================================== */
+
+export const LP_MARKER = "itm-lp";
+const NOINDEX_RE = /<meta[^>]+name=["']robots["'][^>]*noindex/i;
+const NOINDEX_BLOCK =
+  "<!-- wp:html -->\n" +
+  '<meta name="robots" content="noindex, nofollow">\n' +
+  '<script>(function(){var m=document.createElement("meta");m.name="robots";m.content="noindex, nofollow";document.head.appendChild(m);})();</script>\n' +
+  "<!-- /wp:html -->\n\n";
+
+/** Czy treść strony ma meta robots z noindex. */
+export const hasNoindex = (raw) => NOINDEX_RE.test(raw || "");
+
+/** Treść z blokiem noindex na początku (bez dubla, gdy już jest, np. w kopii innego LP). */
+export const withNoindex = (content) => (hasNoindex(content) ? content : NOINDEX_BLOCK + content);
+
+/** Strona ma znacznik narzędzia LP z WŁASNYM id (p: odpowiedź REST z meta). */
+export function isLpToolPage(p) {
+  return String(p?.meta?._kad_post_classname || "").split(/\s+/).includes(`${LP_MARKER}-${p?.id}`);
+}
+
+/** Dopisuje znacznik narzędzia LP (zachowuje inne klasy Kadence). */
+export async function markLpPage(id, prevClass = "") {
+  const klasy = String(prevClass || "").split(/\s+/).filter((c) => c && c !== LP_MARKER && !c.startsWith(`${LP_MARKER}-`));
+  await wpFetch(`/wp/v2/pages/${id}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ meta: { _kad_post_classname: [...klasy, LP_MARKER, `${LP_MARKER}-${id}`].join(" ") } }),
+  });
+}
+
+/** Shortcode'y CF7 z zaślepką zamiast id formularza (id="XXXXXXX", „DO PODPIĘCIA”). */
+export const formPlaceholders = (html) =>
+  [...new Set((html || "").match(/\[contact-form-7[^\]]*\]/g) || [])].filter((f) => /X{3,}|DO PODPI/i.test(f));
+
+/**
+ * Tworzy LP: OPUBLIKOWANA, z noindex i znacznikiem narzędzia. Zwraca { id, link (publiczny), editLink, oznaczona }.
+ * Brak znacznika (oznaczona: false) nie blokuje strony - tylko późniejszej poprawki CLI przez --strona.
+ */
+export async function createLpPage({ title, content, slug, meta }) {
+  const page = await wpCreatePage({
+    title,
+    content: withNoindex(content),
+    status: "publish",
+    slug,
+    meta: { ...(meta || {}), _kad_post_classname: LP_MARKER },
+  });
+  try {
+    await markLpPage(page.id);
+    page.oznaczona = true;
+  } catch (err) {
+    console.warn(`[lp] strona ${page.id}: nie udało się zapisać znacznika narzędzia LP:`, err.message);
+    page.oznaczona = false;
+  }
+  return page;
 }
 
 export function splitLinks(raw) {
@@ -152,7 +227,7 @@ export async function resolveMediaUrl(url, seoBase, imageDims = null) {
 }
 
 /**
- * Buduje LP w nowym szablonie i tworzy ją w WP jako SZKIC (status draft, zawsze).
+ * Buduje LP w nowym szablonie i publikuje ją w WP (noindex, znacznik narzędzia - createLpPage).
  *
  * @param {object} a
  * @param {string} a.zabieg
@@ -273,14 +348,13 @@ export async function buildNewLp({
   if (paletteFixes.length) console.log("[lp-new] paleta przyciemniona pod kontrast WCAG:", paletteFixes.join(", "));
   const pageContent = wrapWpHtmlBlock(pageBody);
 
-  await onProgress("⏳ Tworzę szkic strony w WordPress...");
+  await onProgress("⏳ Publikuję stronę w WordPress (noindex)...");
   await ensureSeoSnippet();
   let page;
   try {
-    page = await wpCreatePage({
+    page = await createLpPage({
       title: copy.seo?.title || `${zabieg} - ${copy.business?.name || ""}`.trim(),
       content: pageContent,
-      status: "draft",
       meta: seoMeta(copy),
     });
   } catch (err) {
@@ -306,14 +380,16 @@ export async function buildNewLp({
 
 /** Listy do raportu końcowego: co zrobione i co wymaga człowieka (te same teksty co w Discordzie). */
 export function summarizeNewLp(result, { themeText = null, webhookLine = null } = {}) {
-  const { copy, palette, heroImageUrl, baResolved, opResolved, mediaFailures, remainingTokens, emptyRegions, assumptions, formShortcode } =
+  const { page, copy, palette, heroImageUrl, baResolved, opResolved, mediaFailures, remainingTokens, emptyRegions, assumptions, formShortcode } =
     result;
   const needs = [
+    ...formPlaceholders(formShortcode).map((f) => `Formularz do podpięcia przed reklamą w Meta: ${f} (leady z tej LP nie przyjdą)`),
     ...remainingTokens.map((t) => `Pole bez danych: ${t}`),
     ...emptyRegions.map((r) => `Pusta sekcja (0 elementów): ${r}`),
     ...mediaFailures.map((m) => `Media - ${m}`),
   ];
   if (webhookLine && webhookLine.startsWith("Webhook: NIE")) needs.push(webhookLine);
+  if (page && page.oznaczona === false) needs.push("Brak znacznika narzędzia LP (meta strony): poprawki tej strony tylko ręcznie w wp-admin");
   if (themeText && !palette) needs.push("Motyw: nie udało się wygenerować palety, została domyślna");
   if (assumptions.length) {
     needs.push(
