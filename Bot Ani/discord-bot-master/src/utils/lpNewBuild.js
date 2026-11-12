@@ -99,11 +99,29 @@ const NOINDEX_BLOCK =
   '<script>(function(){var m=document.createElement("meta");m.name="robots";m.content="noindex, nofollow";document.head.appendChild(m);})();</script>\n' +
   "<!-- /wp:html -->\n\n";
 
+/* Poprawki CSS dla każdej LP (Szymon 12.11.2026): szablon (zl-) zeruje marginesy nagłówków sekcji
+ * (`.zl-page h2{margin:0 !important}`), więc nagłówek dotykał treści sekcji albo na nią nachodził.
+ * Selektor ma wyższą specyficzność niż reguła szablonu, więc wygrywa mimo jej !important. */
+const POPRAWKI_ID = "itm-lp-poprawki";
+const POPRAWKI_BLOCK =
+  "<!-- wp:html -->\n" +
+  `<style id="${POPRAWKI_ID}">` +
+  ".zl-page section h2,.zl-page section .zl-h2{margin:0 0 clamp(20px,2.6vw,36px) !important}" +
+  ".zl-page section h3{margin:0 0 clamp(10px,1.4vw,16px) !important}" +
+  ".zl-page section .zl-divider + h2{margin-top:8px !important}" +
+  "</style>\n" +
+  "<!-- /wp:html -->\n\n";
+
+/** Treść z poprawkami CSS (bez dubla). */
+export const withPoprawki = (content) =>
+  (content || "").includes(`id="${POPRAWKI_ID}"`) ? content : POPRAWKI_BLOCK + content;
+
 /** Czy treść strony ma meta robots z noindex. */
 export const hasNoindex = (raw) => NOINDEX_RE.test(raw || "");
 
 /** Treść z blokiem noindex na początku (bez dubla, gdy już jest, np. w kopii innego LP). */
-export const withNoindex = (content) => (hasNoindex(content) ? content : NOINDEX_BLOCK + content);
+export const withNoindex = (content) =>
+  withPoprawki(hasNoindex(content) ? content : NOINDEX_BLOCK + content);
 
 /** Strona ma znacznik narzędzia LP z WŁASNYM id (p: odpowiedź REST z meta). */
 export function isLpToolPage(p) {
