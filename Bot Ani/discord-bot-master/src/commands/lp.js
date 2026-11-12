@@ -3,35 +3,30 @@ import { GOOGLE_LP_SHEET_ID, WP_LP_TEMPLATE_PAGE_ID } from "../config.js";
 import { listZabiegiLP, findReferenceLPForZabieg, upsertLPRow } from "../utils/lpSheet.js";
 import { getLPTemplate } from "../utils/lpTemplate.js";
 import { fetchDocPlainText } from "../utils/googleDocs.js";
-import { generateLPCopy, LPGenerationError, ASSUMPTION_MARKER } from "../utils/lpGenerator.js";
+import { generateLPCopy, LPGenerationError } from "../utils/lpGenerator.js";
 import {
   parseMaterialyInput,
   downloadFileuploaderBuffer,
   parseFileuploaderLink,
-  fileuploaderDirect,
   listShareFolderFiles,
   downloadShareFolderFile,
 } from "../utils/fileuploaderMedia.js";
 import { matchMediaToSlots, MediaMatchError, DEFAULT_MEDIA_SLOTS } from "../utils/mediaMatcher.js";
 import { buildPageContent } from "../utils/lpContentBuilder.js";
-import {
-  wpGetPageRawContent,
-  wpUploadMedia,
-  wpCreatePage,
-  wpUpsertSnippet,
-  ensureMetaDescriptionSnippet,
-  META_DESCRIPTION_KEY,
-} from "../utils/wordpressClient.js";
-import { generateNewLpCopy, NewLPGenerationError } from "../utils/lpNewGenerator.js";
-import {
-  getNewLpTemplate,
-  renderNewTemplate,
-  mapNewCopyToTemplate,
-  wrapWpHtmlBlock,
-} from "../utils/lpNewTemplate.js";
+import { wpGetPageRawContent, wpUploadMedia, wpCreatePage, wpUpsertSnippet } from "../utils/wordpressClient.js";
 import { buildWebhookSnippetCode, slugify } from "./webhook.js";
-import { optimizeToWebp, extForMime } from "../utils/imageOptimize.js";
-import { generatePalette } from "../utils/lpPalette.js";
+import { optimizeToWebp } from "../utils/imageOptimize.js";
+import {
+  LpBuildError,
+  buildNewLp,
+  summarizeNewLp,
+  localSlug,
+  stripAssumptionMarkers,
+  seoMeta,
+  ensureSeoSnippet,
+  splitLinks,
+  normalizeFormShortcode,
+} from "../utils/lpNewBuild.js";
 
 const SHEET_URL = `https://docs.google.com/spreadsheets/d/${GOOGLE_LP_SHEET_ID}/edit`;
 const TEXT_PROMPT_TIMEOUT_MS = 90000;
@@ -61,57 +56,12 @@ function fv(value) {
   return (s || "—").slice(0, 1024);
 }
 
-// Meta description strony. Klucz rejestruje fragment z ensureMetaDescriptionSnippet()
-// - bez niego WP po cichu odrzuca nieznane meta.
-function seoMeta(copy) {
-  const d = copy?.seo?.metaDescription;
-  return d ? { [META_DESCRIPTION_KEY]: d } : undefined;
-}
-
-// Fragment od meta description - przed wpCreatePage; blad nie blokuje strony.
-async function ensureSeoSnippet() {
-  try {
-    await ensureMetaDescriptionSnippet();
-  } catch (err) {
-    console.warn("[lp] nie udalo sie zapewnic fragmentu meta description:", err.message);
-  }
-}
-
 // Rozpakowanie zbiorczego błędu walidacji discord.js (@sapphire/shapeshift),
 // którego .message to samo "Received one or more errors".
 function errDetail(error) {
   const subs = Array.isArray(error?.errors) ? error.errors.map((e) => e?.message ?? String(e)) : [];
   const base = error?.message || String(error);
   return subs.length ? `${base} — ${subs.join(" | ")}` : base;
-}
-
-// Zdejmuje prefiks "⚠️ ZAŁOŻENIE: " z KAŻDEGO stringa w obiekcie copy (strona
-// ma wyglądać czysto), a ścieżki takich pól dopisuje do `out` -> raport.
-function stripAssumptionMarkers(node, out, path = "") {
-  if (typeof node === "string") {
-    if (node.startsWith(ASSUMPTION_MARKER)) {
-      out.push(path || "(pole)");
-      return node.slice(ASSUMPTION_MARKER.length).trim();
-    }
-    return node;
-  }
-  if (Array.isArray(node)) return node.map((v, i) => stripAssumptionMarkers(v, out, `${path}[${i + 1}]`));
-  if (node && typeof node === "object") {
-    const o = {};
-    for (const [k, v] of Object.entries(node)) o[k] = stripAssumptionMarkers(v, out, path ? `${path}.${k}` : k);
-    return o;
-  }
-  return node;
-}
-
-function localSlug(text) {
-  return (text || "")
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/ł/gi, "l")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }
 
 const MIME_EXTENSIONS = {
@@ -313,79 +263,6 @@ async function askTemplateKind(message) {
   }
 }
 
-function splitLinks(raw) {
-  if (!raw || /^\s*brak\s*$/i.test(raw)) return [];
-  // wyciagnij URL-e z DOWOLNEGO miejsca w linii (Discord potrafi opakowac w <>,
-  // dokleic tekst, itd.) - wczesniejszy /^https/ gubil takie linki cicho
-  const urls = String(raw).match(/https?:\/\/[^\s<>"'`)\]]+/gi) || [];
-  return urls.map((u) => u.replace(/[.,;]+$/, ""));
-}
-
-// Operator może wkleić cały shortcode CF7 (zalecane) albo samą nazwę formularza.
-function normalizeFormShortcode(raw) {
-  const t = (raw || "").trim();
-  if (t.startsWith("[")) {
-    const titleMatch = t.match(/title=["']([^"']+)["']/i);
-    return { shortcode: t, name: titleMatch ? titleMatch[1] : "formularz CF7" };
-  }
-  return { shortcode: `[contact-form-7 title="${t}"]`, name: t };
-}
-
-// Pobiera medium (fileuploader /view/ albo dowolny http[s]), konwertuje do
-// WebP + ogranicza szerokosc (strona ma byc szybka) i wgrywa do WP Media
-// Library. Wyjatek: obrazek juz zhostowany na naszym WP i juz w .webp -
-// uzywamy go wprost, bez duplikatu.
-// imageDims (opcjonalnie): obiekt, do ktorego trafia URL -> {width,height}
-// wgranego pliku - renderer dopisuje z tego width/height do <img>.
-async function resolveMediaUrl(url, seoBase, imageDims = null) {
-  const base = (WP_BASE_URL || "").replace(/\/$/, "");
-  if (base && url.startsWith(base) && /\.webp(\?|#|$)/i.test(url)) return url;
-
-  const parsed = parseFileuploaderLink(url);
-  const alt = seoBase.replace(/-/g, " ");
-  try {
-    let buffer, contentType;
-    if (parsed.type === "view") {
-      ({ buffer, contentType } = await downloadFileuploaderBuffer(url));
-    } else {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      contentType = res.headers.get("content-type") || "";
-      if (!/^image\//i.test(contentType)) throw new Error(`odpowiedź to nie obraz (${contentType || "brak content-type"})`);
-      buffer = Buffer.from(await res.arrayBuffer());
-    }
-
-    // 1200px: najszersze zdjecie na LP (hero) ma ~430px CSS, wiec 2x gestosc
-    // i tak sie miesci; 1800px PageSpeed zglaszal jako "larger than it needs to be".
-    const opt = await optimizeToWebp(buffer, contentType, { maxWidth: 1200 });
-    const remember = (up) => {
-      if (imageDims && up.width && up.height) imageDims[up.sourceUrl] = { width: up.width, height: up.height };
-      return up.sourceUrl;
-    };
-    try {
-      return remember(await wpUploadMedia(opt.buffer, `${seoBase}.${opt.ext}`, opt.contentType, { altText: alt, title: alt }));
-    } catch (err) {
-      if (!opt.converted) throw err; // np. WP w ogole nie przyjmuje uploadu
-      return remember(await wpUploadMedia(buffer, `${seoBase}.${extForMime(contentType)}`, contentType, { altText: alt, title: alt }));
-    }
-  } catch (err) {
-    // Ostatnia deska ratunku: jeśli nie udało się pobrać/wgrać pliku do WP
-    // (limit uprawnień, format, timeout...), nie zostawiaj pustego <img src> -
-    // dla fileuploadera /view/ jest bezposredni URL pliku (/api/view/{hash}/file,
-    // patrz fileuploaderDirect) ktory dziala jako <img src> mimo ze sam upload
-    // do WP sie nie udal; dla zwyklego http(s) URL-a uzyj go wprost.
-    if (parsed.type === "view") {
-      console.warn(`resolveMediaUrl: nie wgrano ${url} (${err.message}), używam bezpośredniego URL fileuploadera`);
-      return fileuploaderDirect(url);
-    }
-    if (/^https?:\/\//i.test(url)) {
-      console.warn(`resolveMediaUrl: nie wgrano ${url} (${err.message}), używam URL wprost`);
-      return url;
-    }
-    throw err;
-  }
-}
-
 async function runNewLpFlow(message, { inline }) {
   const zabieg = inline.zabieg || (await askZabieg(message));
   if (!zabieg) return;
@@ -482,115 +359,27 @@ async function runNewLpFlow(message, { inline }) {
     embeds: [infoEmbed("⏳ Nowy szablon: pobieram brief i wytyczne...")],
   });
 
-  let briefText, template;
+  // Rdzeń (brief -> copy -> media -> szkic WP) jest wspólny z CLI Hermesa: utils/lpNewBuild.js.
+  let result;
   try {
-    [briefText, template] = await Promise.all([fetchDocPlainText(briefDocId), getLPTemplate()]);
-  } catch (err) {
-    console.error("Error fetching new-LP starting data:", err);
-    return processingMsg.edit({ embeds: [errorEmbed(`Nie udało się pobrać danych startowych: ${err.message}`)] });
-  }
-
-  await processingMsg.edit({ embeds: [infoEmbed("⏳ Generuję copy LP (nowy szablon)...")] });
-  let copy;
-  try {
-    copy = await generateNewLpCopy({
-      templateRulesText: template.rulesText,
-      briefText,
-      formName,
-      beforeAfterCount: baUrls.length,
-      opinieCount: opUrls.length,
-      additionalNotes: dodatkoweUwagi,
-      packagesInfo: pakietyInfo,
+    result = await buildNewLp({
+      zabieg,
+      briefDocId,
+      formRaw,
+      heroUrls,
+      baUrls,
+      opUrls,
+      themeText,
+      dodatkoweUwagi,
+      pakietyInfo,
       ratingInfo,
+      onProgress: (text) => processingMsg.edit({ embeds: [infoEmbed(text)] }),
     });
   } catch (err) {
-    if (err instanceof NewLPGenerationError) {
-      return processingMsg.edit({ embeds: [errorEmbed(`${err.message}\n\nSzczegóły: ${err.details}`)] });
-    }
+    if (err instanceof LpBuildError) return processingMsg.edit({ embeds: [errorEmbed(err.message)] });
     throw err;
   }
-
-  // "⚠️ ZAŁOŻENIE: " nie ma trafiać na stronę - zdejmujemy prefiks, a listę
-  // założonych pól pokazujemy w raporcie.
-  const assumptions = [];
-  copy = stripAssumptionMarkers(copy, assumptions);
-
-  let palette = null;
-  if (themeText) {
-    await processingMsg.edit({ embeds: [infoEmbed("⏳ Dobieram paletę kolorów...")] });
-    palette = await generatePalette(themeText);
-  }
-
-  await processingMsg.edit({ embeds: [infoEmbed("⏳ Przetwarzam multimedia...")] });
-  const businessSlug = localSlug(copy.business?.name || zabieg || "itm") || "itm";
-  const mediaFailures = [];
-
-  // Brak dedykowanego HERO nie powinien dawać pustego <img src> na stronie -
-  // jeśli operator podał chociaż zdjęcia przed/po, pierwsze z nich jest dużo
-  // lepszym hero niż nic (sekcja i tak trafia na czoło strony).
-  let heroImageUrl = "";
-  const imageDims = {};
-  const heroSourceUrl = heroUrls[0] || baUrls[0] || null;
-  if (!heroSourceUrl) {
-    mediaFailures.push("HERO: nie podano prawidłowego linku (ani HERO, ani żadnego zdjęcia przed/po do zastępczego użycia)");
-  } else {
-    try {
-      heroImageUrl = await resolveMediaUrl(heroSourceUrl, `${businessSlug}-hero`, imageDims);
-      if (!heroUrls[0]) {
-        mediaFailures.push("HERO: nie podano dedykowanego zdjęcia - użyto pierwszego zdjęcia przed/po jako zastępczego, sprawdź czy pasuje");
-      }
-    } catch (err) {
-      console.error("new-LP hero media:", err);
-      mediaFailures.push(`HERO: ${err.message}`);
-    }
-  }
-
-  const resolveMany = async (urls, prefix) => {
-    const out = [];
-    for (let i = 0; i < urls.length; i++) {
-      try {
-        out.push(await resolveMediaUrl(urls[i], `${businessSlug}-${prefix}-${i + 1}`, imageDims));
-      } catch (err) {
-        console.error(`new-LP ${prefix} #${i + 1} media:`, err);
-        mediaFailures.push(`${prefix} #${i + 1}`);
-      }
-    }
-    return out;
-  };
-  const baResolved = await resolveMany(baUrls, "przed-po");
-  const opResolved = await resolveMany(opUrls, "opinia");
-
-  await processingMsg.edit({ embeds: [infoEmbed("⏳ Składam stronę...")] });
-  const templateHtml = await getNewLpTemplate();
-  const { tokens, repeats } = mapNewCopyToTemplate(copy, opResolved);
-  repeats.beforeAfter = baResolved.map((u) => ({ BA_URL: u }));
-  const { content: pageBody, remainingTokens, emptyRegions, paletteFixes } = renderNewTemplate(templateHtml, {
-    tokens,
-    repeats,
-    heroImageUrl,
-    formShortcode,
-    palette,
-    imageDims,
-  });
-  if (paletteFixes.length) console.log("[lp-new] paleta przyciemniona pod kontrast WCAG:", paletteFixes.join(", "));
-  const pageContent = wrapWpHtmlBlock(pageBody);
-
-  await processingMsg.edit({ embeds: [infoEmbed("⏳ Tworzę szkic strony w WordPress...")] });
-  await ensureSeoSnippet();
-  let page;
-  try {
-    page = await wpCreatePage({
-      title: copy.seo?.title || `${zabieg} - ${copy.business?.name || ""}`.trim(),
-      content: pageContent,
-      status: "draft",
-      meta: seoMeta(copy),
-    });
-  } catch (err) {
-    console.error("Error creating new-LP WP page:", err);
-    return processingMsg.edit({
-      embeds: [errorEmbed(`Copy i media gotowe, ale nie udało się utworzyć strony WP: ${err.message}`)],
-    });
-  }
+  const { page, copy } = result;
 
   try {
     await upsertLPRow(GOOGLE_LP_SHEET_ID, {
@@ -645,29 +434,7 @@ async function runNewLpFlow(message, { inline }) {
   }
 
   // -------- RAPORT KOŃCOWY --------
-  const needs = [
-    ...remainingTokens.map((t) => `Pole bez danych: ${t}`),
-    ...emptyRegions.map((r) => `Pusta sekcja (0 elementów): ${r}`),
-    ...mediaFailures.map((m) => `Media - ${m}`),
-  ];
-  if (webhookLine && webhookLine.startsWith("Webhook: NIE")) needs.push(webhookLine);
-  if (themeText && !palette) needs.push("Motyw: nie udało się wygenerować palety, została domyślna");
-  if (assumptions.length) {
-    needs.push(
-      `Założenia AI do sprawdzenia (${assumptions.length}): ${assumptions.slice(0, 15).join(", ")}${
-        assumptions.length > 15 ? " ..." : ""
-      }`
-    );
-  }
-
-  const done = [];
-  if (copy.business?.name) done.push(`Firma: ${copy.business.name}`);
-  done.push("Szablon: nowy (lp-new-v1), 1 blok wp:html");
-  if (palette) done.push(`Motyw: paleta z „${truncate(themeText, 50)}"`);
-  done.push(`Formularz: ${formShortcode}`);
-  done.push(`Media: HERO ${heroImageUrl ? "1" : "0"}, przed/po ${baResolved.length}, opinie ${opResolved.length}`);
-  if (copy.packages?.items?.length) done.push(`Pakiety: ${copy.packages.items.length} kart(y)`);
-  if (webhookLine && !webhookLine.startsWith("Webhook: NIE")) done.push(webhookLine);
+  const { needs, done } = summarizeNewLp(result, { themeText, webhookLine });
 
   const pageUrl = page.link || page.editLink;
   const finalEmbed = new EmbedBuilder()

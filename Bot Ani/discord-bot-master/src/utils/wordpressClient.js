@@ -25,7 +25,7 @@ function apiUrl(path) {
  * page) so that failure shows up as a readable error instead of a confusing
  * "Unexpected token < in JSON" deep in JSON.parse.
  */
-async function wpFetch(path, { method = "GET", headers = {}, body } = {}) {
+export async function wpFetch(path, { method = "GET", headers = {}, body } = {}) {
   const res = await fetch(apiUrl(path), {
     method,
     headers: { Authorization: authHeader(), ...headers },
