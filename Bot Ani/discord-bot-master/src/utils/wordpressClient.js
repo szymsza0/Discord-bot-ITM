@@ -286,3 +286,56 @@ export async function wpUpsertSnippet({
 
   return { id, created: !existing, editLink: snippetEditLink(id) };
 }
+
+/* ==========================================================================
+ *  Contact Form 7 - REST contact-form-7/v1 (konto aplikacji = administrator).
+ *  Zapis (POST /contact-forms, POST /contact-forms/<id>) dziala TYLKO z
+ *  `context: "save"`: bez niego CF7 robi suchy przebieg (200 z podgladem,
+ *  nic nie zapisuje - stad wczesniejsze "API CF7 nie dziala"). Odczyt po ID
+ *  posta (np. 2381); w shortcodzie idzie hash (np. 5618006) z listy formularzy.
+ *  Usuwania (DELETE) nie robimy: CF7 kasuje formularz od razu, bez kosza.
+ * ========================================================================== */
+
+/** Wszystkie formularze: [{ id, hash, slug, title, locale }]. */
+export async function cf7ListForms() {
+  const all = [];
+  for (let offset = 0; offset < 2000; offset += 100) {
+    const partia = await wpFetch(`/contact-form-7/v1/contact-forms?per_page=100&offset=${offset}`);
+    if (!Array.isArray(partia) || !partia.length) break;
+    all.push(...partia);
+    if (partia.length < 100) break;
+  }
+  return all;
+}
+
+/** Formularz po ID posta: { id, slug, title, locale, properties: { form:{content}, mail, mail_2, messages, additional_settings:{content} } }. */
+export async function cf7GetForm(id) {
+  return wpFetch(`/contact-form-7/v1/contact-forms/${id}`);
+}
+
+/**
+ * Tworzy (bez id) albo aktualizuje (z id) formularz CF7. data: { title, locale, form (tekst zakladki
+ * Formularz), mail {recipient, sender, subject, body, additional_headers, attachments, use_html,
+ * exclude_blank}, mail_2 {... , active}, messages {mail_sent_ok, ...}, additional_settings (tekst) }.
+ * Pola pominiete zostaja bez zmian (przy tworzeniu: domyslne z szablonu CF7).
+ */
+export async function cf7SaveForm(data, id = null) {
+  const body = { ...data, context: "save" };
+  if (!body.locale && !id) body.locale = "pl_PL";
+  const saved = await wpFetch(id ? `/contact-form-7/v1/contact-forms/${id}` : "/contact-form-7/v1/contact-forms", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!saved?.id || saved.id < 1) throw new Error("CF7 nie zapisał formularza (brak id w odpowiedzi).");
+  return saved;
+}
+
+/**
+ * Shortcode formularza (hash z listy, jak w wp-admin). Tytuł bez [ ] i cudzysłowów: „]” w tytule
+ * („[KB] Autorska terapia”) kończy shortcode i CF7 pokazuje „Błąd: Brak formularza kontaktowego”.
+ */
+export function cf7Shortcode(f) {
+  const tytul = String(f.title || "").replace(/["\[\]]/g, "").replace(/\s+/g, " ").trim();
+  return `[contact-form-7 id="${f.hash || f.id}" title="${tytul}"]`;
+}
