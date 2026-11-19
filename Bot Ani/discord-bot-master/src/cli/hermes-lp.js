@@ -42,6 +42,7 @@ import {
   cf7Shortcode,
 } from "../utils/wordpressClient.js";
 import { kontrolaLp, bladCf7WRenderze, podepnijFormularz, zaslepkiNaTelefon } from "../utils/lpKontrola.js";
+import { polaCf7, mailZPol, autoodpowiedz, MAIL_2_WYLACZONY } from "../utils/cf7Mail.js";
 import { opinieBooksy, opinieZPliku } from "../utils/booksy.js";
 import { fetchDocPlainText } from "../utils/googleDocs.js";
 import { getLPTemplate } from "../utils/lpTemplate.js";
@@ -99,12 +100,19 @@ Hermes poprawia każdą stronę i formularz CF7 sam; usuwanie (strony, formularz
         do edycji (domyślnie ~/robocze/lp/formularze/<id>.txt, format jak niżej)
   lp.sh formularz-utworz --plik <formularz.txt|.json> [--tytul ...] [--odbiorca <email>] [--temat ...]
         [--nadawca ...] [--komunikat ...] [--strona <id: od razu podepnij>]
+        [--salon "<nazwa salonu jak na LP>" [--salon-adres "..."] [--salon-telefon "..."]]
+      Mail (powiadomienie) budowany z pól formularza. Autoodpowiedź (Mail 2) do osoby z formularza tylko
+      z --salon (neutralny szablon ITM w imieniu TEGO salonu; wymaga pola e-mail), inaczej wyłączona.
+      Maili z formularza innego klienta nigdy nie kopiujemy (Mail 2 z pliku jest pomijany).
       Plik .txt: sekcje „--- ZAKŁADKA FORMULARZ ---”, „--- ZAKŁADKA MAIL ---” (Do:, Od:, Temat:, Nagłówki:,
       Treść: ...), „--- KOMUNIKAT PO WYSŁANIU ---”, „--- DODATKOWE USTAWIENIA ---”; tytuł z --tytul albo
       z nagłówka tytuł "...". Odbiorca: --odbiorca, „Do:” w pliku albo poprzednie formularze klienta
       (ten sam kod w tytule); nieznany = błąd (nie zgadujemy adresu). Zwraca id i shortcode.
   lp.sh formularz-zmien <id> [--plik ...] [--tytul ...] [--odbiorca ...] [--temat ...] [--komunikat ...]
-      zmienia tylko podane części; kopia poprzedniej wersji w ~/robocze/lp/kopie
+        [--salon "<nazwa>" [--salon-adres ...] [--salon-telefon ...] | --bez-autoodpowiedzi] [--mail-z-pol]
+      zmienia tylko podane części; kopia poprzedniej wersji w ~/robocze/lp/kopie. --salon: nowa autoodpowiedź
+      w imieniu salonu; --bez-autoodpowiedzi: Mail 2 wyłączony; --mail-z-pol: treść i temat Maila od nowa z pól.
+  Po każdej zmianie formularza lp.sh uruchamia lp.sh formularze-audyt (marka w mailach ≠ klient strony).
   lp.sh formularz-podepnij <id strony> <id formularza>   shortcode w miejsce zaślepki (id="XXXXXXX"),
         zapisu telefonicznego albo formularza innego klienta; sprawdza wyrenderowaną stronę
   lp.sh wp GET|POST|PUT|PATCH <ścieżka> [--dane plik.json] [--param klucz wartość ...] [--plik wynik.json]
@@ -834,7 +842,20 @@ function polaFormularza(form) {
 /** Plik formularza: .json (pola jak w CF7) albo .txt z sekcjami „--- ZAKŁADKA FORMULARZ ---” itd. */
 function czytajPlikFormularza(plik) {
   const tekst = fs.readFileSync(plik, "utf8");
-  if (/\.json$/i.test(plik)) return { dane: JSON.parse(tekst), pominiete: [] };
+  if (/\.json$/i.test(plik)) {
+    const j = JSON.parse(tekst);
+    // Zrzut formularza z CF7 (properties) albo plik z mail_2: maili cudzego formularza nie przenosimy
+    // (autoodpowiedzi innego salonu szły do klientek, audyt 19.11.2026). Mail 2 tylko z --salon.
+    const p = j.properties || null;
+    const dane = p
+      ? { title: j.title, form: p.form?.content ?? p.form, messages: p.messages, additional_settings: p.additional_settings?.content ?? p.additional_settings }
+      : { ...j };
+    const pominiete = [];
+    if (p?.mail) pominiete.push("Mail z zrzutu formularza CF7 (properties.mail): budowany od nowa z pól");
+    if (p?.mail_2 || dane.mail_2) pominiete.push("Mail 2 z pliku: autoodpowiedź tylko z --salon");
+    delete dane.mail_2;
+    return { dane, pominiete };
+  }
   const sekcje = {};
   let naglowek = "";
   let biez = null;
@@ -860,8 +881,11 @@ function czytajPlikFormularza(plik) {
     const linie = form.split("\n");
     const ost = linie.map((l) => /\[submit\b/.test(l)).lastIndexOf(true);
     if (ost >= 0) {
-      pominiete.push(...linie.slice(ost + 1).filter((l) => l.trim()));
-      form = linie.slice(0, ost + 1).join("\n");
+      // Zamykające znaczniki HTML za [submit] (np. </div> kontenera) zostają, inaczej formularz ma niedomknięty blok.
+      const reszta = linie.slice(ost + 1);
+      const tylkoZnaczniki = (l) => /^\s*(<\/?[a-z][^>]*>\s*)*$/i.test(l);
+      pominiete.push(...reszta.filter((l) => l.trim() && !tylkoZnaczniki(l)));
+      form = [...linie.slice(0, ost + 1), ...reszta.filter(tylkoZnaczniki)].join("\n").replace(/\s+$/, "");
     }
     dane.form = form;
   }
@@ -921,7 +945,7 @@ function opisFormularza(f, shortcode) {
     shortcode,
     pola: polaFormularza(p.form?.content).map((x) => `${x.nazwa} (${x.typ})`),
     mail: { odbiorca: p.mail?.recipient, nadawca: p.mail?.sender, temat: p.mail?.subject },
-    autoodpowiedz_mail_2: p.mail_2?.active ? `tak, do ${p.mail_2.recipient}` : "nie",
+    autoodpowiedz_mail_2: p.mail_2?.active ? `tak, do ${p.mail_2.recipient}, temat „${p.mail_2.subject}”` : "nie",
     komunikat_po_wyslaniu: p.messages?.mail_sent_ok,
     dodatkowe_ustawienia: p.additional_settings?.content || "",
   };
@@ -946,7 +970,6 @@ async function formularz(args) {
 }
 
 const MAIL_DOMYSLNY = { sender: "[_site_title] <wordpress@zapisy-beauty.pl>", additional_headers: "", attachments: "", use_html: false, exclude_blank: false };
-const MAIL_2_WYLACZONY = { active: false, recipient: "", sender: "", subject: "", body: "", additional_headers: "", attachments: "", use_html: false, exclude_blank: false };
 
 /** Odbiorca: --odbiorca, „Do:” z pliku, albo zgodny adres z poprzednich formularzy klienta (ten sam kod w tytule). */
 async function ustalOdbiorce(args, zPliku, tytul) {
@@ -969,6 +992,18 @@ async function ustalOdbiorce(args, zPliku, tytul) {
   return { odbiorca: domyslny, skad: `domyślna skrzynka ITM (brak --odbiorca${kod ? ` i jednego adresu w formularzach ${kod}` : ""})` };
 }
 
+/**
+ * Mail 2 z argumentów: --salon "<nazwa jak na LP>" [--salon-adres ...] [--salon-telefon ...] = autoodpowiedź
+ * z neutralnego szablonu ITM (aktywna tylko, gdy formularz ma pole e-mail); --bez-autoodpowiedzi = wyłączona;
+ * nic = null (bez zmian; nowy formularz: wyłączona).
+ */
+function mail2ZArgs(args, pola) {
+  if (args["bez-autoodpowiedzi"]) return { ...MAIL_2_WYLACZONY };
+  if (args.salon === true) blad('--salon wymaga nazwy salonu, np. --salon "Pure Nature"');
+  if (!str(args.salon)) return null;
+  return autoodpowiedz(pola, { salon: args.salon, adres: str(args["salon-adres"]) || "", telefon: str(args["salon-telefon"]) || "" });
+}
+
 async function formularzUtworz(args) {
   wymagaj(args, { plik: "--plik <formularz.txt|.json>" });
   const plik = sciezka(args.plik);
@@ -980,12 +1015,10 @@ async function formularzUtworz(args) {
   const istniejacy = (await cf7ListForms()).find((f) => f.title === tytul);
   if (istniejacy) blad(`Formularz „${tytul}” już jest (id ${istniejacy.id}). Zmiany: lp.sh formularz-zmien ${istniejacy.id} --plik ...`, { id: istniejacy.id, shortcode: cf7Shortcode(istniejacy) });
   const { odbiorca, skad } = await ustalOdbiorce(args, dane.mail?.recipient, tytul);
-  const pola = polaFormularza(dane.form);
-  const maImie = pola.some((p) => p.nazwa === "imie");
+  const pola = polaCf7(dane.form);
   const mail = {
     ...MAIL_DOMYSLNY,
-    subject: `Nowe zgłoszenie ${tytul}${maImie ? ": [imie]" : ""}`,
-    body: [...pola.map((p) => `${p.etykieta.replace(/[:?]?\s*$/, "")}: [${p.nazwa}]`), "", "Strona: [_url]", "Data: [_date] [_time]"].join("\n"),
+    ...mailZPol(tytul, pola),
     ...Object.fromEntries(Object.entries(dane.mail || {}).filter(([, v]) => str(v))),
     recipient: odbiorca,
   };
@@ -996,7 +1029,7 @@ async function formularzUtworz(args) {
     locale: "pl_PL",
     form: dane.form,
     mail,
-    mail_2: { ...MAIL_2_WYLACZONY, ...(dane.mail_2 || {}) },
+    mail_2: mail2ZArgs(args, pola) || { ...MAIL_2_WYLACZONY },
     messages: { ...(dane.messages || {}), ...(str(args.komunikat) ? { mail_sent_ok: args.komunikat.trim() } : {}) },
     additional_settings: typeof dane.additional_settings === "string" ? dane.additional_settings : "",
   };
@@ -1009,6 +1042,7 @@ async function formularzUtworz(args) {
     utworzony: true,
     ...opisFormularza(f, sc),
     odbiorca_skad: skad,
+    ...(str(args.salon) && !f.properties?.mail_2?.active ? { uwaga_mail_2: "formularz nie ma pola e-mail: autoodpowiedź wyłączona" } : {}),
     ...(pominiete.length ? { pominiete_linie_po_submit: pominiete } : {}),
     ...(saved.config_errors && Object.keys(saved.config_errors).length ? { bledy_konfiguracji_cf7: saved.config_errors } : {}),
   };
@@ -1025,6 +1059,7 @@ async function formularzZmien(args) {
   const p = obecny.properties || {};
   const { dane, pominiete } = str(args.plik) ? czytajPlikFormularza(sciezka(args.plik)) : { dane: {}, pominiete: [] };
   const zmiany = {};
+  if (str(args.salon) && args["bez-autoodpowiedzi"]) blad("--salon albo --bez-autoodpowiedzi, nie oba.");
   const tytul = str(args.tytul) || (str(dane.title) && dane.title !== obecny.title ? dane.title : null);
   if (tytul) zmiany.title = tytul;
   if (str(dane.form)) zmiany.form = dane.form;
@@ -1037,11 +1072,17 @@ async function formularzZmien(args) {
     if (!poprawnyOdbiorca(mail.recipient)) blad(`Odbiorca to nie adres e-mail: ${mail.recipient} (nie zgaduję adresu; --odbiorca <email>).`);
     zmiany.mail = mail;
   }
-  if (dane.mail_2) zmiany.mail_2 = { ...p.mail_2, ...dane.mail_2 };
+  if (args["mail-z-pol"]) {
+    zmiany.mail = { ...(zmiany.mail || p.mail), ...mailZPol(zmiany.title || obecny.title, polaCf7(zmiany.form || p.form?.content)) };
+    if (str(args.temat)) zmiany.mail.subject = args.temat.trim();
+  }
+  if (dane.mail_2) pominiete.push("Mail 2 z pliku pominięty: autoodpowiedź tylko z --salon albo --bez-autoodpowiedzi");
+  const m2 = mail2ZArgs(args, polaCf7(zmiany.form || p.form?.content));
+  if (m2) zmiany.mail_2 = m2;
   const komunikat = str(args.komunikat) || dane.messages?.mail_sent_ok;
   if (komunikat) zmiany.messages = { ...p.messages, ...(dane.messages || {}), mail_sent_ok: komunikat };
   if (typeof dane.additional_settings === "string") zmiany.additional_settings = dane.additional_settings;
-  if (!Object.keys(zmiany).length) blad("Nic do zmiany: podaj --plik albo --tytul / --odbiorca / --temat / --komunikat.");
+  if (!Object.keys(zmiany).length) blad("Nic do zmiany: podaj --plik albo --tytul / --odbiorca / --temat / --komunikat / --salon / --bez-autoodpowiedzi / --mail-z-pol.");
   const kopia = kopiaLokalna(`formularz-${obecny.id}`, JSON.stringify(obecny, null, 2), "json");
   await cf7SaveForm(zmiany, obecny.id);
   const po = await cf7GetForm(obecny.id);
@@ -1068,7 +1109,8 @@ async function podepnij(stronaId, krotki) {
   const r = await zapiszStrone(obecna, { content: html });
   const po = await wpFetch(`/wp/v2/pages/${stronaId}?context=edit&_fields=status,link,content`);
   const rendered = po.content?.rendered || "";
-  const wystapienia = new Set(rendered.match(new RegExp(`wpcf7-f${krotki.id}-p\\d+-o\\d+`, "g")) || []).size;
+  // Render z REST nie ma części -p<strona> (wpcf7-f<ID>-o<n>), żywa strona ją ma.
+  const wystapienia = new Set(rendered.match(new RegExp(`wpcf7-f${krotki.id}(?:-p\\d+)?-o\\d+`, "g")) || []).size;
   const widac = wystapienia > 0;
   return {
     strona: stronaId,
